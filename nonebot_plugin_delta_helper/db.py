@@ -1,0 +1,61 @@
+from nonebot_plugin_orm import async_scoped_session, AsyncSession
+from nonebot.log import logger
+from .model import UserData, LatestRecord
+from sqlalchemy.future import select
+import traceback
+
+class UserDataDatabase:
+    def __init__(self, session: async_scoped_session|AsyncSession) -> None:
+        self.session = session
+
+    async def get_user_data(self, qq: int) -> UserData|None:
+        return await self.session.get(UserData, qq)
+    
+    async def add_user_data(self, external_user_data: UserData) -> bool:
+        try:
+            await self.session.merge(external_user_data)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f'插入信息表时发生错误:\n{e}')
+            await self.session.rollback()
+            return False
+        else:
+            return True
+        
+    async def update_user_data(self, external_user_data: UserData) -> bool:
+        try:
+            await self.session.merge(external_user_data)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f'更新信息表时发生错误:\n{e}')
+            await self.session.rollback()
+            return False
+        else:
+            return True
+
+    async def get_user_data_list(self) -> list[UserData]:
+        stmt = select(UserData)
+        return list((await self.session.execute(statement=stmt)).scalars().all())
+        
+    async def commit(self) -> None:
+        await self.session.commit()
+
+    # 最新战绩相关方法
+    async def get_latest_record(self, qq_id: int) -> LatestRecord|None:
+        """获取用户最新战绩记录"""
+        return await self.session.get(LatestRecord, qq_id)
+
+    async def update_latest_record(self, qq_id: int, record_id: str) -> bool:
+        """更新用户最新战绩记录"""
+        try:
+            latest_record = LatestRecord(
+                qq_id=qq_id,
+                latest_record_id=record_id
+            )
+            await self.session.merge(latest_record)
+            return True
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f'更新最新战绩记录时发生错误:\n{e}')
+            await self.session.rollback()
+            return False
