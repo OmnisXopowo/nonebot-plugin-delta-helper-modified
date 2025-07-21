@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import json
-from nonebot import get_plugin_config, on_command, require
+from nonebot import get_plugin_config, on_command, require, get_driver
 from nonebot.plugin import PluginMetadata
 from nonebot.log import logger
 from nonebot.adapters.onebot.v11.event import MessageEvent, GroupMessageEvent
@@ -22,6 +22,8 @@ from .util import trans_num_easy_for_read, get_map_name
 from nonebot_plugin_saa import Image, Text, TargetQQGroup
 from nonebot_plugin_orm import async_scoped_session, get_session
 from nonebot_plugin_apscheduler import scheduler
+
+driver = get_driver()
 
 
 __plugin_meta__ = PluginMetadata(
@@ -342,11 +344,9 @@ async def start_watch_record():
     await session.close()
 
 # 启动时初始化
+@driver.on_startup
 async def initialize_plugin():
     """插件初始化"""
     # 启动战绩监控
     await start_watch_record()
     logger.info("三角洲助手插件初始化完成")
-
-# 启动插件
-asyncio.run(initialize_plugin())
