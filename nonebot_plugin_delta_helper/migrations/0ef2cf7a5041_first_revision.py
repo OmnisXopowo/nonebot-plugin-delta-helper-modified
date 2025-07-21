@@ -1,6 +1,6 @@
 """first revision
 
-迁移 ID: 0ef2cf7a5040
+迁移 ID: 0ef2cf7a5041
 父迁移: 
 创建时间: 2025-07-21 16:43:22.667289
 
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '0ef2cf7a5040'
+revision: str = '0ef2cf7a5041'
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = ('nonebot_plugin_delta_helper',)
 depends_on: str | Sequence[str] | None = None
