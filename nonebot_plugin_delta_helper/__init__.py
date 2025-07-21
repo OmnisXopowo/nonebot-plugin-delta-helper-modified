@@ -157,12 +157,11 @@ def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADC
 @bind_delta_help.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
     await bind_delta_help.finish("""
-    三角洲助手插件使用帮助：
-    1. 登录三角洲账号：使用\"三角洲登录\"命令登录三角洲账号
-    2. 查看三角洲信息：使用\"三角洲信息\"命令查看三角洲基本信息
-    3. 查看三角洲密码：使用\"三角洲密码\"命令查看三角洲今日密码门密码
-    4. 战绩播报：登录后会自动播报百万撤离或百万战损战绩
-    """)
+三角洲助手插件使用帮助：
+1. 使用\"三角洲登录\"命令登录三角洲账号，需要用摄像头扫码
+2. 使用\"三角洲信息\"命令查看三角洲基本信息
+3. 使用\"三角洲密码\"命令查看三角洲今日密码门密码
+4. 战绩播报：登录后会自动播报百万撤离或百万战损战绩""")
 
 @bind_delta_login.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
