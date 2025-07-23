@@ -40,3 +40,45 @@ def get_map_name(map_id: str) -> str:
         '8803': "潮汐监狱-绝密",
     }
     return map_dict.get(map_id, "未知地图")
+
+def timestamp_to_readable(timestamp: int) -> str:
+    """将时间戳转换为易读的时间格式
+    
+    Args:
+        timestamp: Unix时间戳（秒）
+        
+    Returns:
+        格式化的时间字符串，如 "2025-01-21 14:30:00"
+    """
+    import datetime
+    try:
+        dt = datetime.datetime.fromtimestamp(timestamp)
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return "未知时间"
+
+def seconds_to_duration(seconds: int) -> str:
+    """将秒数转换为易读的时长格式
+    
+    Args:
+        seconds: 秒数
+        
+    Returns:
+        格式化的时长字符串，如 "2小时30分钟"
+    """
+    if seconds <= 0:
+        return "已完成"
+    
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    
+    if hours > 0:
+        if minutes > 0:
+            return f"{hours}小时{minutes}分钟"
+        else:
+            return f"{hours}小时"
+    else:
+        if minutes > 0:
+            return f"{minutes}分钟"
+        else:
+            return f"{seconds}秒"

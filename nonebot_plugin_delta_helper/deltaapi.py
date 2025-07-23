@@ -303,7 +303,7 @@ class DeltaApi:
             response = await self.client.get(url, params=params, cookies=cookies, headers=headers)
             
             result = response.text
-            logger.debug(f"AccessToken获取结果: {result}")
+            # logger.debug(f"AccessToken获取结果: {result}")
             
             # 解析JSONP响应
             # 匹配 try{miloJsonpCb_86690({...});}catch(e){} 格式
@@ -316,7 +316,7 @@ class DeltaApi:
                     return {'status': False, 'message': 'AccessToken获取失败', 'data': {}}
             
             json_data = json.loads(jsonp_match.group(1))
-            logger.debug(f"解析的JSON数据: {json_data}")
+            # logger.debug(f"解析的JSON数据: {json_data}")
             
             if json_data['iRet'] != '0' and json_data['iRet'] != 0:
                 logger.error(f"AccessToken获取失败，iRet: {json_data['iRet']}")
@@ -386,7 +386,7 @@ class DeltaApi:
                 url = 'https://comm.aci.game.qq.com/main'
                 response = await self.client.get(url, params=params, headers=headers)
                 result = response.text
-                logger.debug(f"获取角色信息结果: {result}")
+                # logger.debug(f"获取角色信息结果: {result}")
                 
                 # 解析响应数据
                 import re
@@ -480,7 +480,7 @@ class DeltaApi:
             response = await self.client.post(url, params=form_params, cookies=cookies, headers=headers)
             
             data = response.json()
-            logger.debug(f"玩家基础信息：{data}")
+            # logger.debug(f"玩家基础信息：{data}")
             if data['ret'] == 0:
                 # 处理玩家数据
                 player_data = data['jData']['userData'].copy()
@@ -623,3 +623,34 @@ class DeltaApi:
             logger.error(f"获取战绩失败: {e}")
             logger.error(traceback.format_exc())
             return {'status': False, 'message': '获取战绩失败，详情请查看日志', 'data': {}}
+
+    async def get_safehousedevice_status(self, access_token: str, openid: str, access_type: str = 'qc'):
+        try:
+            # 参数验证
+            if not openid or not access_token:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+
+            # 发送请求获取设备状态
+            params = {
+                'iChartId': 365589,
+                'iSubChartId': 365589,
+                'sIdeToken': 'bQaMCQ',
+                'source': 2
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+            else:
+                return {'status': False, 'message': '获取失败', 'data': {}}
+        except Exception as e:
+            logger.error(f"获取特勤处状态失败: {e}")
+            logger.error(traceback.format_exc())
+            return {'status': False, 'message': '获取特勤处状态失败，详情请查看日志', 'data': {}}

@@ -16,10 +16,10 @@ require("nonebot_plugin_apscheduler")
 from .config import Config
 from .deltaapi import DeltaApi
 from .db import UserDataDatabase
-from .model import UserData
-from .util import trans_num_easy_for_read, get_map_name
+from .model import UserData, SafehouseRecord
+from .util import trans_num_easy_for_read, get_map_name, seconds_to_duration
 
-from nonebot_plugin_saa import Image, Text, TargetQQGroup
+from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention
 from nonebot_plugin_orm import async_scoped_session, get_session
 from nonebot_plugin_apscheduler import scheduler
 
@@ -51,9 +51,23 @@ bind_delta_help = on_command("三角洲帮助")
 bind_delta_login = on_command("三角洲登录")
 bind_delta_player_info = on_command("三角洲信息")
 bind_delta_password = on_command("三角洲密码")
+bind_delta_safehouse = on_command("三角洲特勤处")
+bind_delta_safehouse_remind_open = on_command("三角洲特勤处提醒开启")
+bind_delta_safehouse_remind_close = on_command("三角洲特勤处提醒关闭")
+
+@bind_delta_help.handle()
+async def _(event: MessageEvent, session: async_scoped_session):
+    await bind_delta_help.finish("""三角洲助手插件使用帮助：
+1. 三角洲登录：登录三角洲账号，需要用摄像头扫码，登录后会自动播报百万撤离或百万战损战绩
+2. 三角洲信息：查看三角洲基本信息
+3. 三角洲密码：查看三角洲今日密码门密码
+4. 三角洲特勤处：查看三角洲特勤处制造状态
+5. 三角洲特勤处提醒开启：开启特勤处提醒功能
+6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
+SAFEHOUSE_CHECK_INTERVAL = 600  # 特勤处检查间隔（秒）
 
 def generate_record_id(record_data: dict) -> str:
     """生成战绩唯一标识"""
@@ -101,7 +115,7 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
         loss_int = int(final_price) - int(flow_cal_gained_price)
         loss_str = trans_num_easy_for_read(loss_int)
 
-        logger.debug(f"获取到玩家{user_name}的战绩：时间：{event_time}，地图：{get_map_name(map_id)}，结果：{result_str}，存活时长：{duration_str}，击杀干员：{kill_count}，带出：{price_str}，战损：{loss_str}")
+        # logger.debug(f"获取到玩家{user_name}的战绩：时间：{event_time}，地图：{get_map_name(map_id)}，结果：{result_str}，存活时长：{duration_str}，击杀干员：{kill_count}，带出：{price_str}，战损：{loss_str}")
         
         if price_int > 1000000:
             # 构建消息
@@ -156,14 +170,45 @@ def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADC
         logger.error(f"检查战绩时间限制失败: {e}")
         return False
 
-@bind_delta_help.handle()
+@bind_delta_safehouse_remind_open.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
-    await bind_delta_help.finish("""
-三角洲助手插件使用帮助：
-1. 使用\"三角洲登录\"命令登录三角洲账号，需要用摄像头扫码
-2. 使用\"三角洲信息\"命令查看三角洲基本信息
-3. 使用\"三角洲密码\"命令查看三角洲今日密码门密码
-4. 战绩播报：登录后会自动播报百万撤离或百万战损战绩""")
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_safehouse_remind_open.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    if user_data.if_remind_safehouse:
+        await bind_delta_safehouse_remind_open.finish("特勤处提醒功能已开启", reply_message=True)
+    user_data.if_remind_safehouse = True
+    
+    # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
+    qq_id = user_data.qq_id
+    
+    await user_data_database.update_user_data(user_data)
+    await user_data_database.commit()
+    scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
+    await bind_delta_safehouse_remind_open.finish("特勤处提醒功能已开启", reply_message=True)
+
+@bind_delta_safehouse_remind_close.handle()
+async def _(event: MessageEvent, session: async_scoped_session):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_safehouse_remind_close.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    if not user_data.if_remind_safehouse:
+        await bind_delta_safehouse_remind_close.finish("特勤处提醒功能已关闭", reply_message=True)
+    user_data.if_remind_safehouse = False
+    
+    # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
+    qq_id = user_data.qq_id
+    
+    await user_data_database.update_user_data(user_data)
+    await user_data_database.commit()
+    try:
+        scheduler.remove_job(f'delta_watch_safehouse_{qq_id}')
+    except Exception:
+        # 任务可能不存在，忽略错误
+        pass
+    await bind_delta_safehouse_remind_close.finish("特勤处提醒功能已关闭", reply_message=True)
 
 @bind_delta_login.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -174,19 +219,19 @@ async def _(event: MessageEvent, session: async_scoped_session):
 
     iamgebase64 = res['message']['image']
     cookie = json.dumps(res['message']['cookie'])
-    logger.debug(f"cookie: {cookie},type: {type(cookie)}")
+    # logger.debug(f"cookie: {cookie},type: {type(cookie)}")
     qrSig = res['message']['qrSig']
     qrToken = res['message']['token']
     loginSig = res['message']['loginSig']
 
     img = base64.b64decode(iamgebase64)
-    await Image(image=img).send(reply=True)
+    await (Text("请使用摄像头扫码") + Image(image=img)).send(reply=True)
 
     while True:
         res = await deltaapi.get_login_status(cookie, qrSig, qrToken, loginSig)
         if res['code'] == 0:
             cookie = json.dumps(res['data']['cookie'])
-            logger.debug(f"cookie: {cookie},type: {type(cookie)}")
+            # logger.debug(f"cookie: {cookie},type: {type(cookie)}")
             res = await deltaapi.get_access_token(cookie)
             if res['status']:
                 access_token = res['data']['access_token']
@@ -230,7 +275,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
     try:
         if res['status']:
-            logger.debug(f"角色信息：{res['data']}")
+            # logger.debug(f"角色信息：{res['data']}")
             await bind_delta_player_info.finish(f"角色名：{res['data']['player']['charac_name']}，现金：{trans_num_easy_for_read(res['data']['money'])}", reply_message=True)
         else:
             await bind_delta_player_info.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
@@ -238,8 +283,46 @@ async def _(event: MessageEvent, session: async_scoped_session):
         pass
     except Exception as e:
         logger.error(traceback.format_exc())
-        await bind_delta_player_info.finish(f"查询角色信息失败：{e}\n详情请查看日志", reply_message=True)
+        await bind_delta_player_info.finish(f"查询角色信息失败，可以需要重新登录\n详情请查看日志", reply_message=True)
 
+@bind_delta_safehouse.handle()
+async def _(event: MessageEvent, session: async_scoped_session):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_safehouse.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    deltaapi = DeltaApi()
+    res = await deltaapi.get_safehousedevice_status(access_token=user_data.access_token, openid=user_data.openid)
+    message = None
+    if res['status']:
+        place_data = res['data'].get('placeData', [])
+        relate_map = res['data'].get('relateMap', {})
+        for device in place_data:
+            object_id = device.get('objectId', 0)
+            left_time = device.get('leftTime', 0)
+            push_time = device.get('pushTime', 0)
+            place_name = device.get('placeName', '')
+            
+            if object_id > 0 and left_time > 0:
+                # 正在生产
+                object_name = relate_map.get(str(object_id), {}).get('objectName', f'物品{object_id}')
+                if not message:
+                    message = Text(f"{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}\n")
+                else:
+                    message += Text(f"{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}\n")
+            else:
+                # 闲置状态
+                if not message:
+                    message = Text(f"{place_name}：闲置中\n")
+                else:
+                    message += Text(f"{place_name}：闲置中\n")
+        
+        if message:
+            await message.finish(reply=True)
+        else:
+            await bind_delta_safehouse.finish("特勤处状态获取成功，但没有数据", reply_message=True)
+    else:
+        await bind_delta_safehouse.finish(f"获取特勤处状态失败：{res['message']}", reply_message=True)
 
 @bind_delta_password.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -265,15 +348,15 @@ async def watch_record(user_name: str, qq_id: int):
     user_data = await user_data_database.get_user_data(qq_id)
     if user_data:
         deltaapi = DeltaApi()
-        logger.debug(f"开始获取玩家{user_name}的战绩")
+        # logger.debug(f"开始获取玩家{user_name}的战绩")
         res = await deltaapi.get_record(user_data.access_token, user_data.openid)
         if res['status']:
-            logger.debug(f"玩家{user_name}的战绩：{res['data']}")
+            # logger.debug(f"玩家{user_name}的战绩：{res['data']}")
             
             # 只处理gun模式战绩
             gun_records = res['data'].get('gun', [])
             if not gun_records:
-                logger.debug(f"玩家{user_name}没有gun模式战绩")
+                # logger.debug(f"玩家{user_name}没有gun模式战绩")
                 await session.close()
                 return
             
@@ -322,6 +405,95 @@ async def watch_record(user_name: str, qq_id: int):
     except Exception as e:
         logger.error(f"关闭数据库会话失败: {e}")
 
+async def send_safehouse_message(qq_id: int, object_name: str, left_time: int):
+    await asyncio.sleep(left_time)
+    session = get_session()
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(qq_id)
+    if not user_data:
+        await session.close()
+        return
+
+    if user_data.if_remind_safehouse:
+        message = Mention(user_id=str(qq_id)) + Text(f"{object_name}生产完成！\n")
+        
+        await message.send_to(target=TargetQQGroup(group_id=user_data.group_id))
+        logger.info(f"特勤处生产完成提醒: {qq_id} - {object_name}")
+
+    await session.close()
+
+async def watch_safehouse(qq_id: int):
+    """监控特勤处生产状态"""
+    session = get_session()
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(qq_id)
+    if not user_data:
+        await session.close()
+        return
+    
+    try:
+        deltaapi = DeltaApi()
+        res = await deltaapi.get_safehousedevice_status(user_data.access_token, user_data.openid)
+        
+        if not res['status']:
+            logger.error(f"获取特勤处状态失败: {res['message']}")
+            await session.close()
+            return
+        
+        place_data = res['data'].get('placeData', [])
+        relate_map = res['data'].get('relateMap', {})
+        
+        # 获取当前用户的特勤处记录
+        current_records = await user_data_database.get_safehouse_records(qq_id)
+        current_device_ids = {record.device_id for record in current_records}
+        
+        # 处理每个设备的状态
+        for device in place_data:
+            device_id = device.get('Id', '')
+            left_time = device.get('leftTime', 0)
+            object_id = device.get('objectId', 0)
+            place_name = device.get('placeName', '')
+            
+            # 如果设备正在生产且有剩余时间
+            if left_time > 0 and object_id > 0:
+                # 获取物品信息
+                object_info = relate_map.get(str(object_id), {})
+                object_name = object_info.get('objectName', f'物品{object_id}')
+                
+                # 创建或更新记录
+                safehouse_record = SafehouseRecord(
+                    qq_id=qq_id,
+                    device_id=device_id,
+                    object_id=object_id,
+                    object_name=object_name,
+                    place_name=place_name,
+                    left_time=left_time,
+                    push_time=device.get('pushTime', 0)
+                )
+                
+                await user_data_database.update_safehouse_record(safehouse_record)
+                current_device_ids.discard(device_id)
+                
+                # 剩余时间小于检查间隔加60s，启动发送提醒任务
+                if left_time <= SAFEHOUSE_CHECK_INTERVAL + 60:
+                    # 启动发送提醒任务
+                    scheduler.add_job(send_safehouse_message, 'date', run_date=datetime.datetime.now(), id=f'delta_send_safehouse_message_{qq_id}_{device_id}', replace_existing=True, kwargs={'qq_id': qq_id, 'object_name': object_name, 'left_time': left_time}, max_instances=1)
+                    
+                    # 删除记录
+                    await user_data_database.delete_safehouse_record(qq_id, device_id)
+        
+        # 删除已完成的记录（设备不再生产）
+        for device_id in current_device_ids:
+            await user_data_database.delete_safehouse_record(qq_id, device_id)
+        
+        await user_data_database.commit()
+        
+    except Exception as e:
+        logger.error(f"监控特勤处状态失败: {e}")
+        logger.error(traceback.format_exc())
+    finally:
+        await session.close()
+
 async def start_watch_record():
     session = get_session()
     user_data_database = UserDataDatabase(session)
@@ -329,11 +501,20 @@ async def start_watch_record():
     for user_data in user_data_list:
         deltaapi = DeltaApi()
         try:
-            res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
+            # 提前获取所有需要的属性，避免在调度器中访问ORM对象
+            qq_id = user_data.qq_id
+            access_token = user_data.access_token
+            openid = user_data.openid
+            if_remind_safehouse = user_data.if_remind_safehouse
+            
+            res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
             if res['status'] and 'charac_name' in res['data']['player']:
                 user_name = res['data']['player']['charac_name']
-                qq_id = user_data.qq_id
                 scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                # 添加特勤处监控任务
+
+                if if_remind_safehouse:
+                    scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
 
             else:
                 continue

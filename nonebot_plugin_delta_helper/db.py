@@ -1,6 +1,6 @@
 from nonebot_plugin_orm import async_scoped_session, AsyncSession
 from nonebot.log import logger
-from .model import UserData, LatestRecord
+from .model import UserData, LatestRecord, SafehouseRecord
 from sqlalchemy.future import select
 import traceback
 
@@ -57,5 +57,39 @@ class UserDataDatabase:
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.error(f'更新最新战绩记录时发生错误:\n{e}')
+            await self.session.rollback()
+            return False
+
+    # 特勤处生产记录相关方法
+    async def get_safehouse_records(self, qq_id: int) -> list[SafehouseRecord]:
+        """获取用户特勤处生产记录"""
+        stmt = select(SafehouseRecord).where(SafehouseRecord.qq_id == qq_id)
+        return list((await self.session.execute(statement=stmt)).scalars().all())
+
+    async def update_safehouse_record(self, safehouse_record: SafehouseRecord) -> bool:
+        """更新特勤处生产记录"""
+        try:
+            await self.session.merge(safehouse_record)
+            return True
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f'更新特勤处生产记录时发生错误:\n{e}')
+            await self.session.rollback()
+            return False
+
+    async def delete_safehouse_record(self, qq_id: int, device_id: str) -> bool:
+        """删除特勤处生产记录"""
+        try:
+            stmt = select(SafehouseRecord).where(
+                SafehouseRecord.qq_id == qq_id,
+                SafehouseRecord.device_id == device_id
+            )
+            record = (await self.session.execute(statement=stmt)).scalar_one_or_none()
+            if record:
+                await self.session.delete(record)
+            return True
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f'删除特勤处生产记录时发生错误:\n{e}')
             await self.session.rollback()
             return False
