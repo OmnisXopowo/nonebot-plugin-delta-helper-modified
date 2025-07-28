@@ -2,7 +2,6 @@ from nonebot.log import logger
 
 import httpx
 import time
-import traceback
 import base64
 import json
 import urllib.parse
@@ -119,8 +118,7 @@ class DeltaApi:
                 logger.error(f"获取二维码失败")
                 return {'status': False, 'message': "获取二维码失败"}
         except Exception as e:
-            logger.error(f"获取二维码失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取二维码失败: {e}")
             return {'status': False, 'message': '获取二维码失败，详情请查看日志'}
 
     async def get_login_status(self, cookie: str, qrSig: str, qrToken: str, loginSig: str):
@@ -238,8 +236,7 @@ class DeltaApi:
         except json.JSONDecodeError:
             return {'code': -1, 'message': 'cookie格式错误', 'data': {}}
         except Exception as e:
-            logger.error(f"获取登录状态失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取登录状态失败: {e}")
             return {'code': -4, 'message': '获取登录状态失败，详情请查看日志', 'data': {}}
 
     async def get_access_token(self, cookie: str):
@@ -335,8 +332,7 @@ class DeltaApi:
         except json.JSONDecodeError:
             return {'status': False, 'message': 'cookie格式错误', 'data': {}}
         except Exception as e:
-            logger.error(f"获取access token失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取access token失败: {e}")
             return {'status': False, 'message': 'AccessToken获取失败', 'data': {}}
 
     async def bind(self, access_token: str, openid: str, access_type: str = 'qc'):
@@ -444,8 +440,7 @@ class DeltaApi:
             return {'status': True, 'message': '获取成功', 'data': data['jData']['bindarea']}
             
         except Exception as e:
-            logger.error(f"绑定失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"绑定失败: {e}")
             return {'status': False, 'message': '绑定失败，详情请查看日志', 'data': {}}
 
     async def get_player_info(self, access_token: str, openid: str, season_id: int = 0, access_type: str = 'qc'):
@@ -513,8 +508,7 @@ class DeltaApi:
             return {'status': True, 'message': '获取成功', 'data': game_data}
             
         except Exception as e:
-            logger.error(f"获取玩家信息失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取玩家信息失败: {e}")
             return {'status': False, 'message': '获取玩家信息失败，详情请查看日志', 'data': {}}
 
 
@@ -565,8 +559,7 @@ class DeltaApi:
             return {'status': True, 'message': '获取成功', 'data': rooms}
             
         except Exception as e:
-            logger.error(f"获取密码失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取密码失败: {e}")
             return {'status': False, 'message': '获取密码失败，详情请查看日志', 'data': {}}
 
     async def get_record(self, access_token: str, openid: str, access_type: str = 'qc'):
@@ -620,8 +613,7 @@ class DeltaApi:
             return {'status': True, 'message': '获取成功', 'data': game_data}
             
         except Exception as e:
-            logger.error(f"获取战绩失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取战绩失败: {e}")
             return {'status': False, 'message': '获取战绩失败，详情请查看日志', 'data': {}}
 
     async def get_safehousedevice_status(self, access_token: str, openid: str, access_type: str = 'qc'):
@@ -651,6 +643,40 @@ class DeltaApi:
             else:
                 return {'status': False, 'message': '获取失败', 'data': {}}
         except Exception as e:
-            logger.error(f"获取特勤处状态失败: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"获取特勤处状态失败: {e}")
             return {'status': False, 'message': '获取特勤处状态失败，详情请查看日志', 'data': {}}
+
+    async def get_object_info(self, access_token: str, openid: str, access_type: str = 'qc', object_id: str = ''):
+        try:
+            # 参数验证
+            if not openid or not access_token or not object_id:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+
+            # 发送请求获取物品信息
+            params = {
+                'iChartId': 365589,
+                'iSubChartId': 365589,
+                'sIdeToken': 'bQaMCQ',
+                'source': 2,
+                'param': json.dumps({
+                    'primary': 'props',
+                    'second': 'collection',
+                    'objectID': object_id,
+                }),
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+            else:
+                return {'status': False, 'message': '获取失败', 'data': {}}
+        except Exception as e:
+            logger.exception(f"获取物品信息失败: {e}")
+            return {'status': False, 'message': '获取物品信息失败，详情请查看日志', 'data': {}}

@@ -2,7 +2,6 @@ from nonebot_plugin_orm import async_scoped_session, AsyncSession
 from nonebot.log import logger
 from .model import UserData, LatestRecord, SafehouseRecord
 from sqlalchemy.future import select
-import traceback
 
 class UserDataDatabase:
     def __init__(self, session: async_scoped_session|AsyncSession) -> None:
@@ -15,8 +14,7 @@ class UserDataDatabase:
         try:
             await self.session.merge(external_user_data)
         except Exception as e:
-            logger.error(traceback.format_exc())
-            logger.error(f'插入信息表时发生错误:\n{e}')
+            logger.exception(f'插入信息表时发生错误')
             await self.session.rollback()
             return False
         else:
@@ -26,8 +24,7 @@ class UserDataDatabase:
         try:
             await self.session.merge(external_user_data)
         except Exception as e:
-            logger.error(traceback.format_exc())
-            logger.error(f'更新信息表时发生错误:\n{e}')
+            logger.exception(f'更新信息表时发生错误')
             await self.session.rollback()
             return False
         else:
@@ -55,8 +52,7 @@ class UserDataDatabase:
             await self.session.merge(latest_record)
             return True
         except Exception as e:
-            logger.error(traceback.format_exc())
-            logger.error(f'更新最新战绩记录时发生错误:\n{e}')
+            logger.exception(f'更新最新战绩记录时发生错误')
             await self.session.rollback()
             return False
 
@@ -72,8 +68,7 @@ class UserDataDatabase:
             await self.session.merge(safehouse_record)
             return True
         except Exception as e:
-            logger.error(traceback.format_exc())
-            logger.error(f'更新特勤处生产记录时发生错误:\n{e}')
+            logger.exception(f'更新特勤处生产记录时发生错误')
             await self.session.rollback()
             return False
 
@@ -89,7 +84,6 @@ class UserDataDatabase:
                 await self.session.delete(record)
             return True
         except Exception as e:
-            logger.error(traceback.format_exc())
-            logger.error(f'删除特勤处生产记录时发生错误:\n{e}')
+            logger.exception(f'删除特勤处生产记录时发生错误')
             await self.session.rollback()
             return False

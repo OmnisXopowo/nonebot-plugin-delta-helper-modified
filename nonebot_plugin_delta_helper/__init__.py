@@ -6,7 +6,6 @@ from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 from nonebot.log import logger
 from nonebot.adapters.onebot.v11.event import MessageEvent, GroupMessageEvent
 from nonebot.exception import FinishedException
-import traceback
 import datetime
 
 require("nonebot_plugin_saa")
@@ -147,8 +146,7 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
         
         return message
     except Exception as e:
-        logger.error(f"格式化战绩消息失败: {e}")
-        logger.error(traceback.format_exc())
+        logger.exception(f"格式化战绩消息失败: {e}")
         return None
 
 def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADCAST_EXPIRED_MINUTES) -> bool:
@@ -287,7 +285,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     except FinishedException:
         pass
     except Exception as e:
-        logger.error(traceback.format_exc())
+        logger.exception(f"查询角色信息失败")
         await bind_delta_player_info.finish(f"查询角色信息失败，可以需要重新登录\n详情请查看日志", reply_message=True)
 
 @bind_delta_safehouse.handle()
@@ -494,8 +492,7 @@ async def watch_safehouse(qq_id: int):
         await user_data_database.commit()
         
     except Exception as e:
-        logger.error(f"监控特勤处状态失败: {e}")
-        logger.error(traceback.format_exc())
+        logger.exception(f"监控特勤处状态失败: {e}")
     finally:
         await session.close()
 
@@ -524,7 +521,7 @@ async def start_watch_record():
             else:
                 continue
         except Exception as e:
-            logger.error(traceback.format_exc())
+            logger.exception(f"启动战绩监控失败")
             continue
 
     await session.close()
