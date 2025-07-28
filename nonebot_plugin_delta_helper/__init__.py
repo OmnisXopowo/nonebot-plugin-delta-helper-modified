@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 from nonebot import get_plugin_config, on_command, require, get_driver
-from nonebot.plugin import PluginMetadata
+from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 from nonebot.log import logger
 from nonebot.adapters.onebot.v11.event import MessageEvent, GroupMessageEvent
 from nonebot.exception import FinishedException
@@ -40,12 +40,15 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
     # 插件配置项类，如无需配置可不填写。
 
-    supported_adapters={"~onebot.v11"},
+    supported_adapters=inherit_supported_adapters("nonebot_plugin_saa"),
     # 支持的适配器集合，其中 `~` 在此处代表前缀 `nonebot.adapters.`，其余适配器亦按此格式填写。
     # 若插件可以保证兼容所有适配器（即仅使用基本适配器功能）可不填写，否则应该列出插件支持的适配器。
+    extra={
+        "orm_version_location": "migrations",
+    },
 )
 
-config = get_plugin_config(Config)
+# config = get_plugin_config(Config)
 
 bind_delta_help = on_command("三角洲帮助")
 bind_delta_login = on_command("三角洲登录")
@@ -307,15 +310,15 @@ async def _(event: MessageEvent, session: async_scoped_session):
                 # 正在生产
                 object_name = relate_map.get(str(object_id), {}).get('objectName', f'物品{object_id}')
                 if not message:
-                    message = Text(f"{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}\n")
+                    message = Text(f"{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
                 else:
-                    message += Text(f"{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}\n")
+                    message += Text(f"\n{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
             else:
                 # 闲置状态
                 if not message:
-                    message = Text(f"{place_name}：闲置中\n")
+                    message = Text(f"{place_name}：闲置中")
                 else:
-                    message += Text(f"{place_name}：闲置中\n")
+                    message += Text(f"\n{place_name}：闲置中")
         
         if message:
             await message.finish(reply=True)
@@ -415,7 +418,7 @@ async def send_safehouse_message(qq_id: int, object_name: str, left_time: int):
         return
 
     if user_data.if_remind_safehouse:
-        message = Mention(user_id=str(qq_id)) + Text(f"{object_name}生产完成！\n")
+        message = Mention(user_id=str(qq_id)) + Text(f" {object_name}生产完成！")
         
         await message.send_to(target=TargetQQGroup(group_id=user_data.group_id))
         logger.info(f"特勤处生产完成提醒: {qq_id} - {object_name}")
