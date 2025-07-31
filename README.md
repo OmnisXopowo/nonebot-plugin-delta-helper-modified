@@ -92,3 +92,16 @@ nb orm check
 
 ## TODO
 - [ ] 开发其他功能，想要做成信息卡片的形式（个人信息、战绩之类），但是不了解图片排版和渲染，欢迎提建议和issue、PR
+
+## 鸣谢
+- [NoneBot2](https://github.com/nonebot/nonebot2) - 优秀的机器人框架。
+- [DeltaForce API](https://github.com/coolxitech/deltaforce) - 三角洲行动小程序api调用参考。
+- [三角洲行动数据API](https://df-api.apifox.cn/) - [浅巷墨黎](https://github.com/dnyo666)整理的三角洲行动小程序api文档
+
+---
+
+<div align="center">
+
+**如果这个项目对你有帮助，请给它一个 ⭐️ 十分感谢！**
+
+</div>

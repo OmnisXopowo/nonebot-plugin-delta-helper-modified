@@ -5,7 +5,7 @@ import time
 import base64
 import json
 import urllib.parse
-from .util import get_qr_token
+from .util import Util
 
 CONSTANTS = {
     'SIG':'https://xui.ptlogin2.qq.com/ssl/ptqrshow',
@@ -101,9 +101,11 @@ class DeltaApi:
 
             if response.status_code == 200:
                 qrSig = response.cookies.get('qrsig', '')
+                if not qrSig:
+                    return {'status': False, 'message': '获取二维码失败，请重试'}
                 loginSig = response.cookies.get('pt_login_sig', '')
                 iamgebase64 = base64.b64encode(response.content).decode('utf-8')
-                qrToken = get_qr_token(qrSig)
+                qrToken = Util.get_qr_token(qrSig)
 
                 data = {
                     'qrSig': qrSig,
@@ -524,15 +526,11 @@ class DeltaApi:
             
             # 发送请求获取密码信息
             form_data = {
-                'iChartId': 384918,
-                'iSubChartId': 384918,
-                'sIdeToken': 'mbq5GZ',
-                'method': 'dist.contents',
-                'source': 5,
-                'param': json.dumps({
-                    'distType': 'bannerManage',
-                    'contentType': 'secretDay',
-                }),
+                'iChartId': 316969,
+                'iSubChartId': 316969,
+                'sIdeToken': 'NoOapI',
+                'method': 'dfm/center.day.secret',
+                'source': 2
             }
             
             url = CONSTANTS['GAMEBASEURL']
@@ -542,21 +540,7 @@ class DeltaApi:
             if data['ret'] != 0:
                 return {'status': False, 'message': '获取失败,检查鉴权是否过期', 'data': {}}
             
-            # 解析房间密码信息
-            import re
-            content = data['jData']['data']['data']['content']['secretDay']['data'][0]['desc']
-            
-            # 使用正则表达式解析房间和密码
-            pattern = r'^(.+?):(\d{4});?\s*(?:\n|$)'
-            matches = re.findall(pattern, content, re.MULTILINE)
-            
-            rooms = {}
-            for match in matches:
-                room_name = match[0]
-                password = match[1]
-                rooms[room_name] = password
-            
-            return {'status': True, 'message': '获取成功', 'data': rooms}
+            return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             
         except Exception as e:
             logger.exception(f"获取密码失败: {e}")
@@ -658,13 +642,13 @@ class DeltaApi:
 
             # 发送请求获取物品信息
             params = {
-                'iChartId': 365589,
-                'iSubChartId': 365589,
-                'sIdeToken': 'bQaMCQ',
+                'iChartId': 316969,
+                'iSubChartId': 316969,
+                'sIdeToken': 'NoOapI',
+                'method': 'dfm/object.list',
                 'source': 2,
                 'param': json.dumps({
                     'primary': 'props',
-                    'second': 'collection',
                     'objectID': object_id,
                 }),
             }
@@ -680,3 +664,75 @@ class DeltaApi:
         except Exception as e:
             logger.exception(f"获取物品信息失败: {e}")
             return {'status': False, 'message': '获取物品信息失败，详情请查看日志', 'data': {}}
+
+    async def get_daily_report(self, access_token: str, openid: str, access_type: str = 'qc'):
+        try:
+            # 参数验证
+            if not openid or not access_token:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+
+            # 发送请求获取每日报告
+            params = {
+                'iChartId': 316969,
+                'iSubChartId': 316969,
+                'sIdeToken': 'NoOapI',
+                'method': 'dfm/center.recent.detail',
+                'source': 2,
+                'param': json.dumps({
+                    'resourceType': 'sol',
+                }),
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+            else:
+                return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
+        except Exception as e:
+            logger.exception(f"获取每日报告失败: {e}")
+            return {'status': False, 'message': '获取每日报告失败，详情请查看日志', 'data': {}}
+
+    async def get_weekly_report(self, access_token: str, openid: str, access_type: str = 'qc', statDate: str = ''):
+        try:
+            # 参数验证
+            if not openid or not access_token or not statDate:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+            
+            # 发送请求获取每周报告
+            params = {
+                'iChartId': 316968,
+                'iSubChartId': 316968,
+                'sIdeToken': 'KfXJwH',
+                'method': 'dfm/weekly.sol.record',
+                'source': 5,
+                'sArea': 36,
+                'param': json.dumps({
+                    "source":"5",
+                    "method":"dfm/weekly.sol.record",
+                    "statDate":statDate
+                }),
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+            else:
+                return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
+        except Exception as e:
+            logger.exception(f"获取每周报告失败: {e}")
+            return {'status': False, 'message': '获取每周报告失败，详情请查看日志', 'data': {}}

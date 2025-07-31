@@ -16,7 +16,7 @@ from .config import Config
 from .deltaapi import DeltaApi
 from .db import UserDataDatabase
 from .model import UserData, SafehouseRecord
-from .util import trans_num_easy_for_read, get_map_name, seconds_to_duration
+from .util import Util
 from . import migrations
 
 from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention
@@ -58,6 +58,8 @@ bind_delta_password = on_command("三角洲密码")
 bind_delta_safehouse = on_command("三角洲特勤处")
 bind_delta_safehouse_remind_open = on_command("三角洲特勤处提醒开启")
 bind_delta_safehouse_remind_close = on_command("三角洲特勤处提醒关闭")
+bind_delta_daily_report = on_command("三角洲日报")
+bind_delta_weekly_report = on_command("三角洲周报")
 
 @bind_delta_help.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -67,7 +69,9 @@ async def _(event: MessageEvent, session: async_scoped_session):
 3. 三角洲密码：查看三角洲今日密码门密码
 4. 三角洲特勤处：查看三角洲特勤处制造状态
 5. 三角洲特勤处提醒开启：开启特勤处提醒功能
-6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能""")
+6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能
+7. 三角洲日报：查看三角洲日报
+8. 三角洲周报：查看三角洲周报""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
@@ -111,13 +115,13 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
         # 格式化收益
         try:
             price_int = int(final_price)
-            price_str = trans_num_easy_for_read(price_int)
+            price_str = Util.trans_num_easy_for_read(price_int)
         except:
             price_str = final_price
 
         # 计算战损
         loss_int = int(final_price) - int(flow_cal_gained_price)
-        loss_str = trans_num_easy_for_read(loss_int)
+        loss_str = Util.trans_num_easy_for_read(loss_int)
 
         # logger.debug(f"获取到玩家{user_name}的战绩：时间：{event_time}，地图：{get_map_name(map_id)}，结果：{result_str}，存活时长：{duration_str}，击杀干员：{kill_count}，带出：{price_str}，战损：{loss_str}")
         
@@ -125,7 +129,7 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
             # 构建消息
             message = f"🎯 {user_name} 百万撤离！\n"
             message += f"⏰ 时间: {event_time}\n"
-            message += f"🗺️ 地图: {get_map_name(map_id)}\n"
+            message += f"🗺️ 地图: {Util.get_map_name(map_id)}\n"
             message += f"📊 结果: {result_str}\n"
             message += f"⏱️ 存活时长: {duration_str}\n"
             message += f"💀 击杀干员: {kill_count}\n"
@@ -134,7 +138,7 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
         elif loss_int > 1000000:
             message = f"🎯 {user_name} 百万战损！\n"
             message += f"⏰ 时间: {event_time}\n"
-            message += f"🗺️ 地图: {get_map_name(map_id)}\n"
+            message += f"🗺️ 地图: {Util.get_map_name(map_id)}\n"
             message += f"📊 结果: {result_str}\n"
             message += f"⏱️ 存活时长: {duration_str}\n"
             message += f"💀 击杀干员: {kill_count}\n"
@@ -188,6 +192,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     
     await user_data_database.update_user_data(user_data)
     await user_data_database.commit()
+    logger.info(f"启动特勤处监控任务: {qq_id}")
     scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
     await bind_delta_safehouse_remind_open.finish("特勤处提醒功能已开启", reply_message=True)
 
@@ -256,7 +261,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
                     await user_data_database.commit()
                     user_name = res['data']['player']['charac_name']
                     scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
-                    await bind_delta_login.finish(f"登录成功，角色名：{user_name}，现金：{trans_num_easy_for_read(res['data']['money'])}\n登录有效期60天，在小程序登录会使这里的登录状态失效", reply_message=True)
+                    await bind_delta_login.finish(f"登录成功，角色名：{user_name}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}\n登录有效期60天，在小程序登录会使这里的登录状态失效", reply_message=True)
                     
                 else:
                     await bind_delta_login.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
@@ -279,7 +284,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     try:
         if res['status']:
             # logger.debug(f"角色信息：{res['data']}")
-            await bind_delta_player_info.finish(f"角色名：{res['data']['player']['charac_name']}，现金：{trans_num_easy_for_read(res['data']['money'])}", reply_message=True)
+            await bind_delta_player_info.finish(f"角色名：{res['data']['player']['charac_name']}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}", reply_message=True)
         else:
             await bind_delta_player_info.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
     except FinishedException:
@@ -310,9 +315,9 @@ async def _(event: MessageEvent, session: async_scoped_session):
                 # 正在生产
                 object_name = relate_map.get(str(object_id), {}).get('objectName', f'物品{object_id}')
                 if not message:
-                    message = Text(f"{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
+                    message = Text(f"{place_name}：{object_name}，剩余时间：{Util.seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
                 else:
-                    message += Text(f"\n{place_name}：{object_name}，剩余时间：{seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
+                    message += Text(f"\n{place_name}：{object_name}，剩余时间：{Util.seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
             else:
                 # 闲置状态
                 if not message:
@@ -335,15 +340,87 @@ async def _(event: MessageEvent, session: async_scoped_session):
         deltaapi = DeltaApi()
         res = await deltaapi.get_password(user_data.access_token, user_data.openid)
         msgs = None
-        if res['status'] and len(res['data']) > 0:
-            for map in res['data']:
+        password_list = res['data'].get('list', [])
+        if password_list:
+            for password in password_list:
                 if msgs is None:
-                    msgs = Text(f"{map}：{res['data'][map]}")
+                    msgs = Text(f"{password.get('mapName', '未知地图')}：{password.get('secret', '未知密码')}")
                 else:
-                    msgs += Text(f"\n{map}：{res['data'][map]}")
+                    msgs += Text(f"\n{password.get('mapName', '未知地图')}：{password.get('secret', '未知密码')}")
             if msgs is not None:
                 await msgs.finish()
     await bind_delta_password.finish("所有已绑定账号已过期，请先用\"三角洲登录\"命令登录至少一个账号", reply_message=True)
+
+@bind_delta_daily_report.handle()
+async def _(event: MessageEvent, session: async_scoped_session):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_daily_report.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    deltaapi = DeltaApi()
+    res = await deltaapi.get_daily_report(user_data.access_token, user_data.openid)
+    if res['status']:
+        solDetail = res['data'].get('solDetail', None)
+        if solDetail:
+            recentGainDate = solDetail.get('recentGainDate', '未知')
+            recentGain = solDetail.get('recentGain', 0)
+            gain_str = f"{'-' if recentGain < 0 else ''}{Util.trans_num_easy_for_read(abs(recentGain))}"
+            userCollectionTop = solDetail.get('userCollectionTop', None)
+            if userCollectionTop:
+                userCollectionList = userCollectionTop.get('list', None)
+                if userCollectionList:
+                    userCollectionListStr = ""
+                    for item in userCollectionList:
+                        objectID = item.get('objectID', 0)
+                        res = await deltaapi.get_object_info(access_token=user_data.access_token, openid=user_data.openid, object_id=objectID)
+                        if res['status']:
+                            obj_list = res['data'].get('list', [])
+                            if obj_list:
+                                obj_name = obj_list[0].get('objectName', '未知藏品')
+                                if userCollectionListStr == "":
+                                    userCollectionListStr = obj_name
+                                else:
+                                    userCollectionListStr += f"、{obj_name}"
+                        else:
+                            userCollectionListStr += f"未知藏品：{objectID}\n"
+                else:
+                    userCollectionListStr = "未知"
+            else:
+                userCollectionListStr = "未知"
+            await bind_delta_daily_report.finish(f"三角洲日报\n日报日期：{recentGainDate}\n收益：{gain_str}\n价值最高藏品：{userCollectionListStr}", reply_message=True)
+        else:
+            await bind_delta_daily_report.finish("获取三角洲日报失败，没有数据", reply_message=True)
+    else:
+        await bind_delta_daily_report.finish(f"获取三角洲日报失败：{res['message']}", reply_message=True)
+
+@bind_delta_weekly_report.handle()
+async def _(event: MessageEvent, session: async_scoped_session):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_weekly_report.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    deltaapi = DeltaApi()
+    for i in range (1,3):
+        res = await deltaapi.get_weekly_report(access_token=user_data.access_token, openid=user_data.openid, statDate=Util.get_Sunday_date(i))
+        if res['status'] and res['data']:
+            Gained_Price = int(res['data'].get('Gained_Price', 0))
+            Gained_Price_Str = Util.trans_num_easy_for_read(Gained_Price)
+            consume_Price = int(res['data'].get('consume_Price', 0))
+            consume_Price_Str = Util.trans_num_easy_for_read(consume_Price)
+            rise_Price = int(res['data'].get('rise_Price', 0))
+            rise_Price_Str = f"{'-' if rise_Price < 0 else ''}{Util.trans_num_easy_for_read(abs(rise_Price))}"
+            loss = Gained_Price - rise_Price
+            loss_str = Util.trans_num_easy_for_read(abs(loss))
+            total_ArmedForceId_num = res['data'].get('total_ArmedForceId_num', '')
+            total_ArmedForceId_num = total_ArmedForceId_num.replace("'", '"')
+            total_ArmedForceId_num_list = list(map(json.loads, total_ArmedForceId_num.split('#')))
+            total_ArmedForceId_num_list.sort(key=lambda x: x['inum'], reverse=True)
+
+            await bind_delta_weekly_report.finish(f"三角洲周报：{Gained_Price_Str} - {consume_Price_Str} = {rise_Price_Str}", reply_message=True)
+        else:
+            continue
+    
+    await bind_delta_weekly_report.finish("获取三角洲周报失败，可能需要重新登录或上周对局次数过少", reply_message=True)
 
 async def watch_record(user_name: str, qq_id: int):
     session = get_session()
@@ -449,7 +526,8 @@ async def watch_safehouse(qq_id: int):
         # 获取当前用户的特勤处记录
         current_records = await user_data_database.get_safehouse_records(qq_id)
         current_device_ids = {record.device_id for record in current_records}
-        
+        info = ""
+
         # 处理每个设备的状态
         for device in place_data:
             device_id = device.get('Id', '')
@@ -473,12 +551,14 @@ async def watch_safehouse(qq_id: int):
                     left_time=left_time,
                     push_time=device.get('pushTime', 0)
                 )
+                info += f"{place_name} - {object_name} - 剩余{left_time}秒\n"
                 
                 await user_data_database.update_safehouse_record(safehouse_record)
                 current_device_ids.discard(device_id)
                 
                 # 剩余时间小于检查间隔加60s，启动发送提醒任务
                 if left_time <= SAFEHOUSE_CHECK_INTERVAL + 60:
+                    logger.info(f"{left_time}秒后启动发送提醒任务: {qq_id} - {device_id}")
                     # 启动发送提醒任务
                     scheduler.add_job(send_safehouse_message, 'date', run_date=datetime.datetime.now(), id=f'delta_send_safehouse_message_{qq_id}_{device_id}', replace_existing=True, kwargs={'qq_id': qq_id, 'object_name': object_name, 'left_time': left_time}, max_instances=1)
                     
@@ -490,6 +570,10 @@ async def watch_safehouse(qq_id: int):
             await user_data_database.delete_safehouse_record(qq_id, device_id)
         
         await user_data_database.commit()
+        if info != "":
+            logger.info(f"{qq_id}特勤处状态: {info}")
+        else:
+            logger.info(f"{qq_id}特勤处状态: 闲置中")
         
     except Exception as e:
         logger.exception(f"监控特勤处状态失败: {e}")
@@ -516,6 +600,7 @@ async def start_watch_record():
                 # 添加特勤处监控任务
 
                 if if_remind_safehouse:
+                    logger.info(f"启动特勤处监控任务: {qq_id}")
                     scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
 
             else:
