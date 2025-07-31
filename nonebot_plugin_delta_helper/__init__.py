@@ -71,7 +71,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
 5. 三角洲特勤处提醒开启：开启特勤处提醒功能
 6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能
 7. 三角洲日报：查看三角洲日报
-8. 三角洲周报：查看三角洲周报""")
+8. 三角洲周报：查看三角洲周报(开发中)""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
