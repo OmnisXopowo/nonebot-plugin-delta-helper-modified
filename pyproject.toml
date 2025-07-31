@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nonebot-plugin-delta-helper"
-version = "0.7.0"
+version = "0.9.0"
 description = ""
 authors = ["Irelia <1074822720@qq.com>"]
 license = "MIT"
