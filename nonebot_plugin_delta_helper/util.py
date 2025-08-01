@@ -32,7 +32,9 @@ class Util:
         return hash_val & 2147483647
 
     @staticmethod
-    def get_map_name(map_id: str) -> str:
+    def get_map_name(map_id: str|int) -> str:
+        if isinstance(map_id, int):
+            map_id = str(map_id)
         map_dict = {
             '2231': "零号大坝-前夜",
             '2232': "零号大坝-永夜",
@@ -45,6 +47,7 @@ class Util:
             '8102': "巴克什-机密",
             '8103': "巴克什-绝密",
             '8803': "潮汐监狱-绝密",
+            '2212': "红薯窝"
         }
         return map_dict.get(map_id, "未知地图")
 
@@ -66,7 +69,7 @@ class Util:
             return "未知时间"
 
     @staticmethod
-    def seconds_to_duration(seconds: int) -> str:
+    def seconds_to_duration(seconds: int|str) -> str:
         """将秒数转换为易读的时长格式
         
         Args:
@@ -75,6 +78,8 @@ class Util:
         Returns:
             格式化的时长字符串，如 "2小时30分钟"
         """
+        if isinstance(seconds, str):
+            seconds = int(seconds)
         if seconds <= 0:
             return "已完成"
         
@@ -93,7 +98,7 @@ class Util:
                 return f"{seconds}秒"
 
     @staticmethod
-    def get_Sunday_date(which_week: int = 1) -> str:
+    def get_Sunday_date(which_week: int = 1) -> tuple[str, str]:
         """获取指定周的周日日期
 
         Args:
@@ -120,22 +125,22 @@ class Util:
             days_to_last_sunday = (weekday + 1) + 7 * (which_week - 1)
         
         sunday = today - datetime.timedelta(days=days_to_last_sunday)
-        return sunday.strftime('%Y%m%d')
+        return sunday.strftime('%Y%m%d'), sunday.strftime('%Y-%m-%d')
 
     @staticmethod
     def get_armed_force_name(armed_force_id: int) -> str:
         armed_force_dict = {
-            10017: "乌鲁鲁",
-            10007: "威龙",
-            10020: "无名",
-            10019: "深蓝",
-            10002: "牧羊人",
-            10021: "疾风",
-            10000: "红狼",
-            10018: "蛊",
-            10001: "蜂医",
-            10006: "露娜",
-            10016: "骇爪",
+            30009: "乌鲁鲁",
+            10010: "威龙",
+            10011: "无名",
+            30010: "深蓝",
+            30008: "牧羊人",
+            10012: "疾风",
+            10007: "红狼",
+            20004: "蛊",
+            20003: "蜂医",
+            40005: "露娜",
+            40010: "骇爪",
         }
 
         return armed_force_dict.get(armed_force_id, "未知干员")

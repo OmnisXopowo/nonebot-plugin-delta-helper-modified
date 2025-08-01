@@ -625,7 +625,7 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
-                return {'status': False, 'message': '获取失败', 'data': {}}
+                return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
             logger.exception(f"获取特勤处状态失败: {e}")
             return {'status': False, 'message': '获取特勤处状态失败，详情请查看日志', 'data': {}}
@@ -736,3 +736,73 @@ class DeltaApi:
         except Exception as e:
             logger.exception(f"获取每周报告失败: {e}")
             return {'status': False, 'message': '获取每周报告失败，详情请查看日志', 'data': {}}
+
+    async def get_weekly_friend_report(self, access_token: str, openid: str, access_type: str = 'qc', statDate: str = ''):
+        try:
+            # 参数验证
+            if not openid or not access_token or not statDate:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+
+            # 发送请求获取每周好友报告
+            params = {
+                'iChartId': 316968,
+                'iSubChartId': 316968,
+                'sIdeToken': 'KfXJwH',
+                'method': 'dfm/weekly.sol.friend.record',
+                'source': 5,
+                'sArea': 36,
+                'param': json.dumps({
+                    "source":"5",
+                    "method":"dfm/weekly.sol.friend.record",
+                    "statDate":statDate
+                }),
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+            else:
+                return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
+        except Exception as e:
+            logger.exception(f"获取每周报告失败: {e}")
+            return {'status': False, 'message': '获取每周好友报告失败，详情请查看日志', 'data': {}}
+
+    async def get_user_info(self, access_token: str, openid: str, access_type: str = 'qc', user_openid: str = ''):
+        try:
+            # 参数验证
+            if not openid or not access_token or not user_openid:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+
+            # 发送请求获取用户信息
+            params = {
+                'iChartId': 369172,
+                'iSubChartId': 369172,
+                'sIdeToken': 'FDNRsR',
+                'method': 'dfm/center.user.info',
+                'source': 5,
+                'sArea': 36,
+                'openid': user_openid
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']}
+            else:
+                return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
+        except Exception as e:
+            logger.exception(f"获取用户信息失败: {e}")
+            return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}

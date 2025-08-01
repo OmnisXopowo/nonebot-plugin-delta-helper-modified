@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import urllib.parse
 from nonebot import get_plugin_config, on_command, require, get_driver
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 from nonebot.log import logger
@@ -19,7 +20,7 @@ from .model import UserData, SafehouseRecord
 from .util import Util
 from . import migrations
 
-from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention
+from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention, AggregatedMessageFactory
 from nonebot_plugin_orm import async_scoped_session, get_session
 from nonebot_plugin_apscheduler import scheduler
 
@@ -71,7 +72,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
 5. 三角洲特勤处提醒开启：开启特勤处提醒功能
 6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能
 7. 三角洲日报：查看三角洲日报
-8. 三角洲周报：查看三角洲周报(开发中)""")
+8. 三角洲周报：查看三角洲周报""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
@@ -399,24 +400,145 @@ async def _(event: MessageEvent, session: async_scoped_session):
     user_data = await user_data_database.get_user_data(event.user_id)
     if not user_data:
         await bind_delta_weekly_report.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    access_token = user_data.access_token
+    openid = user_data.openid
+    await user_data_database.commit()
     deltaapi = DeltaApi()
+    res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
+    if res['status'] and 'charac_name' in res['data']['player']:
+        user_name = res['data']['player']['charac_name']
+    else:
+        await bind_delta_weekly_report.finish("获取角色信息失败，可能需要重新登录", reply_message=True)
     for i in range (1,3):
-        res = await deltaapi.get_weekly_report(access_token=user_data.access_token, openid=user_data.openid, statDate=Util.get_Sunday_date(i))
+        statDate, statDate_str = Util.get_Sunday_date(i)
+        res = await deltaapi.get_weekly_report(access_token=access_token, openid=openid, statDate=statDate)
         if res['status'] and res['data']:
+            # 解析总带出
             Gained_Price = int(res['data'].get('Gained_Price', 0))
             Gained_Price_Str = Util.trans_num_easy_for_read(Gained_Price)
+
+            # 解析总战损
             consume_Price = int(res['data'].get('consume_Price', 0))
             consume_Price_Str = Util.trans_num_easy_for_read(consume_Price)
+
+            # 解析资产净增
             rise_Price = int(res['data'].get('rise_Price', 0))
             rise_Price_Str = f"{'-' if rise_Price < 0 else ''}{Util.trans_num_easy_for_read(abs(rise_Price))}"
-            loss = Gained_Price - rise_Price
-            loss_str = Util.trans_num_easy_for_read(abs(loss))
+
+            # 解析总利润
+            profit = Gained_Price - consume_Price
+            profit_str = f"{'-' if profit < 0 else ''}{Util.trans_num_easy_for_read(abs(profit))}"
+
+            # 解析使用干员信息
             total_ArmedForceId_num = res['data'].get('total_ArmedForceId_num', '')
             total_ArmedForceId_num = total_ArmedForceId_num.replace("'", '"')
             total_ArmedForceId_num_list = list(map(json.loads, total_ArmedForceId_num.split('#')))
             total_ArmedForceId_num_list.sort(key=lambda x: x['inum'], reverse=True)
 
-            await bind_delta_weekly_report.finish(f"三角洲周报：{Gained_Price_Str} - {consume_Price_Str} = {rise_Price_Str}", reply_message=True)
+            # 解析资产变化
+            Total_Price = res['data'].get('Total_Price', '')
+            import re
+            def extract_price(text: str) -> str:
+                m = re.match(r'(\w+)-(\d+)-(\d+)', text)
+                if m:
+                    return m.group(3)
+                return ""
+            price_list = list(map(extract_price, Total_Price.split(',')))
+
+            # 解析总场次
+            total_sol_num = res['data'].get('total_sol_num', '0')
+
+            # 解析总击杀
+            total_Kill_Player = res['data'].get('total_Kill_Player', '0')
+
+            # 解析总死亡
+            total_Death_Count = res['data'].get('total_Death_Count', '0')
+
+            # 解析总在线时间
+            total_Online_Time = res['data'].get('total_Online_Time', '0')
+            total_Online_Time_str = Util.seconds_to_duration(total_Online_Time)
+
+            # 解析撤离成功次数
+            total_exacuation_num = res['data'].get('total_exacuation_num', '0')
+
+            # 解析百万撤离次数
+            GainedPrice_overmillion_num = res['data'].get('GainedPrice_overmillion_num', '0')
+
+            # 解析游玩地图信息
+            total_mapid_num = res['data'].get('total_mapid_num', '')
+            total_mapid_num = total_mapid_num.replace("'", '"')
+            total_mapid_num_list = list(map(json.loads, total_mapid_num.split('#')))
+            total_mapid_num_list.sort(key=lambda x: x['inum'], reverse=True)
+
+            res = await deltaapi.get_weekly_friend_report(access_token=access_token, openid=openid, statDate=statDate)
+
+            friend_list = []
+            if res['status']:
+                friends_sol_record = res['data'].get('friends_sol_record', [])
+                if friends_sol_record:
+                    for friend in friends_sol_record:
+                        friend_dict = {}
+                        Friend_is_Escape1_num = friend.get('Friend_is_Escape1_num', 0)
+                        Friend_is_Escape2_num = friend.get('Friend_is_Escape2_num', 0)
+                        if Friend_is_Escape1_num + Friend_is_Escape2_num <= 0:
+                            continue
+
+                        friend_openid = friend.get('friend_openid', '')
+                        res = await deltaapi.get_user_info(access_token=access_token, openid=openid, user_openid=friend_openid)
+                        if res['status']:
+                            charac_name = res['data'].get('charac_name', '')
+                            charac_name = urllib.parse.unquote(charac_name) if charac_name else "未知好友"
+                            Friend_Escape1_consume_Price = friend.get('Friend_Escape1_consume_Price', 0)
+                            Friend_Escape2_consume_Price = friend.get('Friend_Escape2_consume_Price', 0)
+                            Friend_Sum_Escape1_Gained_Price = friend.get('Friend_Sum_Escape1_Gained_Price', 0)
+                            Friend_Sum_Escape2_Gained_Price = friend.get('Friend_Sum_Escape2_Gained_Price', 0)
+                            Friend_is_Escape1_num = friend.get('Friend_is_Escape1_num', 0)
+                            Friend_is_Escape2_num = friend.get('Friend_is_Escape2_num', 0)
+                            Friend_total_sol_KillPlayer = friend.get('Friend_total_sol_KillPlayer', 0)
+                            Friend_total_sol_DeathCount = friend.get('Friend_total_sol_DeathCount', 0)
+                            Friend_total_sol_num = friend.get('Friend_total_sol_num', 0)
+
+                            friend_dict['charac_name'] = charac_name
+                            friend_dict['sol_num'] = Friend_total_sol_num
+                            friend_dict['kill_num'] = Friend_total_sol_KillPlayer
+                            friend_dict['death_num'] = Friend_total_sol_DeathCount
+                            friend_dict['escape_num'] =  Friend_is_Escape1_num
+                            friend_dict['fail_num'] = Friend_is_Escape2_num
+                            friend_dict['gained_str'] = Util.trans_num_easy_for_read(Friend_Sum_Escape1_Gained_Price + Friend_Sum_Escape2_Gained_Price)
+                            friend_dict['consume_str'] = Util.trans_num_easy_for_read(Friend_Escape1_consume_Price + Friend_Escape2_consume_Price)
+                            profit = Friend_Sum_Escape1_Gained_Price + Friend_Sum_Escape2_Gained_Price - Friend_Escape1_consume_Price - Friend_Escape2_consume_Price
+                            friend_dict['profit_str'] = f"{'-' if profit < 0 else ''}{Util.trans_num_easy_for_read(abs(profit))}"
+                            friend_list.append(friend_dict)
+                    friend_list.sort(key=lambda x: x['sol_num'], reverse=True)
+            msgs = []
+            message = Text(f"【{user_name}烽火周报 - 日期：{statDate_str}】")
+            msgs.append(message)
+            message = Text(f"--- 基本信息 ---\n")
+            message += Text(f"总览：{total_sol_num}场 | {total_exacuation_num}成功撤离 | {GainedPrice_overmillion_num}百万撤离\n")
+            message += Text(f"KD： {total_Kill_Player}杀/{total_Death_Count}死\n")
+            message += Text(f"在线时间：{total_Online_Time_str}\n")
+            message += Text(f"总带出：{Gained_Price_Str} | 总战损：{consume_Price_Str} | 总利润：{profit_str}\n")
+            message += Text(f"资产变化：{Util.trans_num_easy_for_read(price_list[0])} -> {Util.trans_num_easy_for_read(price_list[-1])} | 资产净增：{rise_Price_Str}\n")
+            msgs.append(message)
+            message = Text(f"--- 干员使用情况 ---")
+            for armed_force in total_ArmedForceId_num_list:
+                armed_force_name = Util.get_armed_force_name(armed_force.get('ArmedForceId', 0))
+                armed_force_num = armed_force.get('inum', 0)
+                message += Text(f"\n{armed_force_name}：{armed_force_num}场")
+            msgs.append(message)
+            message = Text(f"--- 地图游玩情况 ---")
+            for map_info in total_mapid_num_list:
+                map_name = Util.get_map_name(map_info.get('MapId', 0))
+                map_num = map_info.get('inum', 0)
+                message += Text(f"\n{map_name}：{map_num}场")
+            msgs.append(message)
+            message = Text(f"--- 队友协作情况 ---\n注：KD为好友KD，带出和战损为本人战损")
+            for friend in friend_list:
+                message += Text(f"\n[{friend['charac_name']}]")
+                message += Text(f"\n  总览：{friend['sol_num']}场 | {friend['escape_num']}撤离/{friend['fail_num']}失败 | {friend['kill_num']}杀/{friend['death_num']}死")
+                message += Text(f"\n  带出：{friend['gained_str']} | 战损：{friend['consume_str']} | 利润：{friend['profit_str']}")
+            msgs.append(message)
+            await AggregatedMessageFactory(msgs).finish()
         else:
             continue
     
