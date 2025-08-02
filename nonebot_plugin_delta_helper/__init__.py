@@ -417,7 +417,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
             Gained_Price = int(res['data'].get('Gained_Price', 0))
             Gained_Price_Str = Util.trans_num_easy_for_read(Gained_Price)
 
-            # 解析总战损
+            # 解析总带入
             consume_Price = int(res['data'].get('consume_Price', 0))
             consume_Price_Str = Util.trans_num_easy_for_read(consume_Price)
 
@@ -517,7 +517,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
             message += Text(f"总览：{total_sol_num}场 | {total_exacuation_num}成功撤离 | {GainedPrice_overmillion_num}百万撤离\n")
             message += Text(f"KD： {total_Kill_Player}杀/{total_Death_Count}死\n")
             message += Text(f"在线时间：{total_Online_Time_str}\n")
-            message += Text(f"总带出：{Gained_Price_Str} | 总战损：{consume_Price_Str} | 总利润：{profit_str}\n")
+            message += Text(f"总带出：{Gained_Price_Str} | 总带入：{consume_Price_Str}\n")
             message += Text(f"资产变化：{Util.trans_num_easy_for_read(price_list[0])} -> {Util.trans_num_easy_for_read(price_list[-1])} | 资产净增：{rise_Price_Str}\n")
             msgs.append(message)
             message = Text(f"--- 干员使用情况 ---")
@@ -532,7 +532,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
                 map_num = map_info.get('inum', 0)
                 message += Text(f"\n{map_name}：{map_num}场")
             msgs.append(message)
-            message = Text(f"--- 队友协作情况 ---\n注：KD为好友KD，带出和战损为本人战损")
+            message = Text(f"--- 队友协作情况 ---\n注：KD为好友KD，带出和带入为本人的数据")
             for friend in friend_list:
                 message += Text(f"\n[{friend['charac_name']}]")
                 message += Text(f"\n  总览：{friend['sol_num']}场 | {friend['escape_num']}撤离/{friend['fail_num']}失败 | {friend['kill_num']}杀/{friend['death_num']}死")
