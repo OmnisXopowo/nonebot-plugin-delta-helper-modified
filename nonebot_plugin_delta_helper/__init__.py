@@ -2,9 +2,12 @@ import asyncio
 import base64
 import json
 import urllib.parse
+import httpx
+from openai import AsyncOpenAI
 from nonebot import get_plugin_config, on_command, require, get_driver
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 from nonebot.log import logger
+from nonebot.permission import SUPERUSER
 from nonebot.adapters.onebot.v11.event import MessageEvent, GroupMessageEvent
 from nonebot.exception import FinishedException
 import datetime
@@ -12,6 +15,7 @@ import datetime
 require("nonebot_plugin_saa")
 require("nonebot_plugin_orm")
 require("nonebot_plugin_apscheduler")
+require("nonebot_plugin_limiter")
 
 from .config import Config
 from .deltaapi import DeltaApi
@@ -23,6 +27,7 @@ from . import migrations
 from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention, AggregatedMessageFactory
 from nonebot_plugin_orm import async_scoped_session, get_session
 from nonebot_plugin_apscheduler import scheduler
+from nonebot_plugin_limiter import UserScope, Cooldown, GlobalScope
 
 
 driver = get_driver()
@@ -50,7 +55,7 @@ __plugin_meta__ = PluginMetadata(
     },
 )
 
-# config = get_plugin_config(Config)
+config = get_plugin_config(Config)
 
 bind_delta_help = on_command("三角洲帮助")
 bind_delta_login = on_command("三角洲登录")
@@ -61,6 +66,7 @@ bind_delta_safehouse_remind_open = on_command("三角洲特勤处提醒开启")
 bind_delta_safehouse_remind_close = on_command("三角洲特勤处提醒关闭")
 bind_delta_daily_report = on_command("三角洲日报")
 bind_delta_weekly_report = on_command("三角洲周报")
+bind_delta_ai_comment = on_command("三角洲AI锐评", aliases={"三角洲ai锐评"})
 
 @bind_delta_help.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -72,11 +78,16 @@ async def _(event: MessageEvent, session: async_scoped_session):
 5. 三角洲特勤处提醒开启：开启特勤处提醒功能
 6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能
 7. 三角洲日报：查看三角洲日报
-8. 三角洲周报：查看三角洲周报""")
+8. 三角洲周报：查看三角洲周报
+9. 三角洲AI锐评：ai锐评玩家数据""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
 SAFEHOUSE_CHECK_INTERVAL = 600  # 特勤处检查间隔（秒）
+ai_api_key = config.delta_helper_ai_api_key
+ai_base_url = config.delta_helper_ai_base_url
+ai_model = config.delta_helper_ai_model
+ai_proxy = config.delta_helper_ai_proxy
 
 def generate_record_id(record_data: dict) -> str:
     """生成战绩唯一标识"""
@@ -543,6 +554,130 @@ async def _(event: MessageEvent, session: async_scoped_session):
             continue
     
     await bind_delta_weekly_report.finish("获取三角洲周报失败，可能需要重新登录或上周对局次数过少", reply_message=True)
+
+bypass_set = set()
+
+@bind_delta_ai_comment.handle(parameterless=[
+    Cooldown(
+        UserScope(
+            whitelist=tuple(bypass_set),
+            permission=SUPERUSER
+        ), 
+        3600,
+        limit = 1,
+        reject = "ai锐评功能对单个用户冷却时间60分钟，请稍后再试"
+    ),
+    Cooldown(
+        GlobalScope(), 
+        60,
+        limit = 4,
+        reject = "ai锐评功能每分钟最多触发4次，请稍后再试"
+    )
+])
+async def _(event: MessageEvent, session: async_scoped_session):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if user_data:
+        access_token = user_data.access_token
+        openid = user_data.openid
+        await user_data_database.commit()
+    else:
+        await user_data_database.commit()
+        bypass_set.add(event.user_id)
+        await bind_delta_ai_comment.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+   
+    deltaapi = DeltaApi()
+    res = await deltaapi.get_person_center_info(access_token=access_token, openid=openid)
+    if not res['status']:
+        bypass_set.add(event.user_id)
+        await bind_delta_ai_comment.finish("获取角色信息失败，可能需要重新登录", reply_message=True)
+
+    person_center_info = res['data']
+    profitLossRatio = int(person_center_info.get('profitLossRatio', '0'))//100
+    highKillDeathRatio = f"{(int(person_center_info.get('highKillDeathRatio', '0'))/100):.2f}"
+    lowKillDeathRatio = f"{(int(person_center_info.get('lowKillDeathRatio', '0'))/100):.2f}"
+    medKillDeathRatio = f"{(int(person_center_info.get('medKillDeathRatio', '0'))/100):.2f}"
+    totalFight = person_center_info.get('totalFight', '0')
+    totalEscape = person_center_info.get('totalEscape', '0')
+    totalGainedPrice = person_center_info.get('totalGainedPrice', '0')
+    totalConsumePrice = Util.seconds_to_duration(person_center_info.get('totalConsumePrice', '0'))
+    totalKill = person_center_info.get('totalKill', '0')
+
+    for i in range (1,3):
+        statDate, statDate_str = Util.get_Sunday_date(i)
+        res = await deltaapi.get_weekly_report(access_token=access_token, openid=openid, statDate=statDate)
+        if res['status'] and res['data']:
+            # 解析总带出
+            Gained_Price = int(res['data'].get('Gained_Price', 0))
+
+            # 解析资产净增
+            rise_Price = int(res['data'].get('rise_Price', 0))
+
+            # 解析资产变化
+            Total_Price = res['data'].get('Total_Price', '')
+            import re
+            def extract_price(text: str) -> str:
+                m = re.match(r'(\w+)-(\d+)-(\d+)', text)
+                if m:
+                    return m.group(3)
+                return ""
+            price_list = list(map(extract_price, Total_Price.split(',')))
+
+            # 解析总场次
+            total_sol_num = res['data'].get('total_sol_num', '0')
+
+            # 解析总击杀
+            total_Kill_Player = res['data'].get('total_Kill_Player', '0')
+
+            # 解析总死亡
+            total_Death_Count = res['data'].get('total_Death_Count', '0')
+
+            # 解析总在线时间
+            total_Online_Time = res['data'].get('total_Online_Time', '0')
+            total_Online_Time_str = Util.seconds_to_duration(total_Online_Time)
+
+            # 解析撤离成功次数
+            total_exacuation_num = res['data'].get('total_exacuation_num', '0')
+
+            # 解析百万撤离次数
+            GainedPrice_overmillion_num = res['data'].get('GainedPrice_overmillion_num', '0')
+
+        proxy = httpx.Proxy(ai_proxy)
+        httpx_client = httpx.AsyncClient(proxies=proxy)
+        client = AsyncOpenAI(
+            api_key=ai_api_key,
+            base_url=ai_base_url,
+            http_client=httpx_client
+        )
+
+        response = await client.chat.completions.create(
+        model="gemini-2.5-pro",
+        messages=[
+            {"role": "system", "content": "你是一个AI助手。"},
+            {
+                "role": "user",
+                "content": "三角洲行动是一个类塔科夫的搜打撤游戏，这个游戏中的货币叫哈夫币。这个游戏地图分为常规、机密、绝密三个难度，常规没有准入门槛，很多玩家会选择什么都不带进去跑刀，机密需要一定价值的装备才允许进入，地图爆率也更高，当然敌人的装备也是更强大，绝密比机密更高一个等级门槛也更高敌人也更强，因为常规图死亡惩罚较少，所以很多人并不追求杀人或保命玩的比较随意，机密和绝密图因为玩家会携带高价值的装备所以会认真战斗并尽可能保命撤离，所以机密和绝密的KD会比常规图的KD更有含金量（也就是说如果一个人机密和绝密KD高而常规KD低说明这个人在常规图就没想杀人随便玩）。哈夫币几乎仅能通过搜索物资或者杀人舔装备获得，我接下来会向你输入一个玩家的游戏数据，你需要锐评一下这个玩家的数据，先来一句话简评，再详细锐评。因为只有锐评才会被展示，所以不要透露任何有先前对话的信息（也就是我在和你说的这段内容）语言尽量自然并且辛辣。不要有“一句话简评”或“详细锐评”等字眼，只要分段就行。"
+            },
+            {
+                "role": "assistant",
+                "content": "好的，请把这个玩家的游戏数据发给我，我已经准备好对他进行一番“友好”的点评了。"
+            },
+            {
+                "role": "user",
+                "content": f"这个玩家的生涯数据：赚损比（每死一次可以赚多少哈夫币）是{profitLossRatio}，绝密行动kda是{highKillDeathRatio}，机密行动kda是{medKillDeathRatio}，常规行动kda是{lowKillDeathRatio}，总场数是{totalFight}，总撤离数是{totalEscape}，总获取哈夫币是{totalGainedPrice}，总游戏时长是{totalConsumePrice}，总击杀是{totalKill}；这名玩家上周的数据：总场数是{total_sol_num}，总撤离数是{total_exacuation_num}，百万以上撤离次数是{GainedPrice_overmillion_num}，总击杀是{total_Kill_Player}，总死亡是{total_Death_Count}，总游戏时长是{total_Online_Time_str}，总带出是{Gained_Price}，资产是从{price_list[0]}到{price_list[-1]}，资产变化是{rise_Price}。"
+            }
+            ]
+        )
+        if event.user_id in bypass_set:
+            bypass_set.remove(event.user_id)
+        if response.choices[0].message.content:
+            msg = Mention(user_id=str(event.user_id)) + Text(' ') + Text(response.choices[0].message.content.strip())
+            await msg.finish()
+        else:
+            logger.debug(f"AI锐评内容为空: {response.choices[0].message}")
+            await bind_delta_ai_comment.finish("AI锐评内容为空，请查看日志", reply_message=True)
+    bypass_set.add(event.user_id)
+
 
 async def watch_record(user_name: str, qq_id: int):
     session = get_session()

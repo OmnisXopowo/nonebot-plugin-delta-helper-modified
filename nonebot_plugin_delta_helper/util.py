@@ -42,14 +42,15 @@ class Util:
             '2202': "零号大坝-机密",
             '1901': "长弓溪谷-常规",
             '1902': "长弓溪谷-机密",
+            '1912': "长弓溪谷-机密(单排模式)",
             '3901': "航天基地-机密",
             '3902': "航天基地-绝密",
             '8102': "巴克什-机密",
             '8103': "巴克什-绝密",
             '8803': "潮汐监狱-绝密",
-            '2212': "红薯窝"
+            '2212': "零号大坝-机密(单排模式)"
         }
-        return map_dict.get(map_id, "未知地图")
+        return map_dict.get(map_id, f"未知地图{map_id}")
 
     @staticmethod
     def timestamp_to_readable(timestamp: int) -> str:
@@ -143,7 +144,7 @@ class Util:
             40010: "骇爪",
         }
 
-        return armed_force_dict.get(armed_force_id, "未知干员")
+        return armed_force_dict.get(armed_force_id, f"未知干员{armed_force_id}")
 
 
 if __name__ == "__main__":

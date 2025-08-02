@@ -806,3 +806,39 @@ class DeltaApi:
         except Exception as e:
             logger.exception(f"获取用户信息失败: {e}")
             return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}
+
+    async def get_person_center_info(self, access_token: str, openid: str, access_type: str = 'qc'):
+        try:
+            # 参数验证
+            if not openid or not access_token:
+                return {'status': False, 'message': '缺少参数', 'data': {}}
+            
+            # 创建cookie
+            is_qq = access_type == 'qc'
+            cookies = self.create_cookie(openid, access_token, is_qq)
+
+            # 发送请求获取用户信息
+            params = {
+                'iChartId': 316969,
+                'iSubChartId': 316969,
+                'sIdeToken': 'NoOapI',
+                'method': 'dfm/center.person.resource',
+                'source': 2,
+                'param': json.dumps({
+                    "resourceType": "sol",
+                    "seasonid": [1, 2, 3, 4, 5],
+                    "isAllSeason": True
+                    })
+            }
+
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, params=params, cookies=cookies)
+
+            data = response.json()
+            if data['ret'] == 0:
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']['solDetail']}
+            else:
+                return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
+        except Exception as e:
+            logger.exception(f"获取用户信息失败: {e}")
+            return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}
