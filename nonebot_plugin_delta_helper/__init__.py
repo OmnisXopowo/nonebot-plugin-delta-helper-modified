@@ -108,7 +108,7 @@ def generate_record_id(record_data: dict) -> str:
     event_time = record_data.get('dtEventTime', '')
     return event_time
 
-def format_record_message(record_data: dict, user_name: str) -> str|None:
+async def format_record_message(record_data: dict, user_name: str) -> tuple[str, bytes]|None:
     """格式化战绩播报消息"""
     try:
         # 解析时间
@@ -160,6 +160,22 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
             message += f"💀 击杀干员: {kill_count}\n"
             message += f"💰 带出: {price_str}\n"
             message += f"💸 战损: {loss_str}"
+            
+            renderer = await get_renderer()
+            img_data = await renderer.render_battle_record({
+                'user_name': user_name,
+                'title': '百万撤离！',
+                'time': event_time,
+                'map_name': Util.get_map_name(map_id),
+                'result': result_str,
+                'duration': duration_str,
+                'kill_count': kill_count,
+                'price': price_str,
+                'loss': loss_str,
+                'is_gain': True,
+                'main_value': price_str
+            })
+            return message, img_data
         elif loss_int > 1000000:
             message = f"🎯 {user_name} 百万战损！\n"
             message += f"⏰ 时间: {event_time}\n"
@@ -169,6 +185,22 @@ def format_record_message(record_data: dict, user_name: str) -> str|None:
             message += f"💀 击杀干员: {kill_count}\n"
             message += f"💰 带出: {price_str}\n"
             message += f"💸 战损: {loss_str}"
+            
+            renderer = await get_renderer()
+            img_data = await renderer.render_battle_record({
+                'user_name': user_name,
+                'title': '百万战损！',
+                'time': event_time,
+                'map_name': Util.get_map_name(map_id),
+                'result': result_str,
+                'duration': duration_str,
+                'kill_count': kill_count,
+                'price': price_str,
+                'loss': loss_str,
+                'is_gain': False,
+                'main_value': loss_str
+            })
+            return message, img_data
         else:
             return None
 
@@ -286,6 +318,15 @@ async def _(event: MessageEvent, session: async_scoped_session):
                     await user_data_database.commit()
                     user_name = res['data']['player']['charac_name']
                     scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                    try:
+                        renderer = await get_renderer()
+                        img_data = await renderer.render_login_success(user_name, Util.trans_num_easy_for_read(res['data']['money']))
+                        await Image(image=img_data).finish(reply=True)
+                    except FinishedException:
+                        raise
+                    except Exception as e:
+                        logger.error(f"渲染登录成功卡片失败: {e}")
+                        # 降级到文本模式
                     await bind_delta_login.finish(f"登录成功，角色名：{user_name}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}\n登录有效期60天，在小程序登录会使这里的登录状态失效", reply_message=True)
                     
                 else:
@@ -458,6 +499,15 @@ async def _(event: MessageEvent, session: async_scoped_session):
                     userCollectionListStr = "未知"
             else:
                 userCollectionListStr = "未知"
+            try:
+                renderer = await get_renderer()
+                img_data = await renderer.render_daily_report(recentGainDate, recentGain, gain_str, userCollectionListStr)
+                await Image(image=img_data).finish(reply=True)
+            except FinishedException:
+                raise
+            except Exception as e:
+                logger.error(f"渲染日报卡片失败: {e}")
+                # 降级到文本模式
             await bind_delta_daily_report.finish(f"三角洲日报\n日报日期：{recentGainDate}\n收益：{gain_str}\n价值最高藏品：{userCollectionListStr}", reply_message=True)
         else:
             await bind_delta_daily_report.finish("获取三角洲日报失败，没有数据", reply_message=True)
@@ -608,6 +658,15 @@ async def _(event: MessageEvent, session: async_scoped_session):
                 message += Text(f"\n  总览：{friend['sol_num']}场 | {friend['escape_num']}撤离/{friend['fail_num']}失败 | {friend['kill_num']}杀/{friend['death_num']}死")
                 message += Text(f"\n  带出：{friend['gained_str']} | 战损：{friend['consume_str']} | 利润：{friend['profit_str']}")
             msgs.append(message)
+            try:
+                renderer = await get_renderer()
+                img_data = await renderer.render_weekly_report(user_name, statDate_str, Gained_Price_Str, consume_Price_Str, rise_Price_Str, profit_str, total_ArmedForceId_num_list, total_mapid_num_list, friend_list)
+                await Image(image=img_data).finish()
+            except FinishedException:
+                raise
+            except Exception as e:
+                logger.error(f"渲染周报卡片失败: {e}")
+                # 降级到文本模式
             await AggregatedMessageFactory(msgs).finish()
         else:
             continue
@@ -770,13 +829,25 @@ async def watch_record(user_name: str, qq_id: int):
                 # 如果是新战绩（ID不同）
                 if not latest_record_data or latest_record_data.latest_record_id != record_id:
                     # 格式化播报消息
-                    message = format_record_message(latest_record, user_name)
+                    result = await format_record_message(latest_record, user_name)
                     
                     # 发送播报消息
                     try:
-                        if message:
+                        if result:
                             if user_data.group_id != 0:
-                                await Text(message).send_to(target=TargetQQGroup(group_id=user_data.group_id))
+                                if isinstance(result, tuple) and len(result) == 2:
+                                    # 有卡片数据
+                                    message, img_data = result
+                                    try:
+                                        await Image(image=img_data).send_to(target=TargetQQGroup(group_id=user_data.group_id))
+                                    except Exception as e:
+                                        logger.error(f"发送战绩卡片失败: {e}")
+                                        # 降级到文本模式
+                                        await Text(message).send_to(target=TargetQQGroup(group_id=user_data.group_id))
+                                else:
+                                    # 只有文本消息
+                                    message = result
+                                    await Text(message).send_to(target=TargetQQGroup(group_id=user_data.group_id))
                                 logger.info(f"播报战绩成功: {user_name} - {record_id}")
                         
                             # 更新最新战绩记录

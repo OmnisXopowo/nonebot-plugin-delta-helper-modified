@@ -144,9 +144,19 @@ class CardRenderer:
             'collections': collections
         })
     
-    async def render_weekly_report(self, data: dict) -> bytes:
+    async def render_weekly_report(self, user_name: str, statDate_str: str, Gained_Price_Str: str, consume_Price_Str: str, rise_Price_Str: str, profit_str: str, total_ArmedForceId_num_list: list, total_mapid_num_list: list, friend_list: list) -> bytes:
         """渲染周报卡片"""
-        return await self.render_card('weekly_report.html', data)
+        return await self.render_card('weekly_report.html', {
+            'user_name': user_name,
+            'statDate_str': statDate_str,
+            'Gained_Price_Str': Gained_Price_Str,
+            'consume_Price_Str': consume_Price_Str,
+            'rise_Price_Str': rise_Price_Str,
+            'profit_str': profit_str,
+            'total_ArmedForceId_num_list': total_ArmedForceId_num_list,
+            'total_mapid_num_list': total_mapid_num_list,
+            'friend_list': friend_list
+        })
     
     async def render_battle_record(self, data: dict) -> bytes:
         """渲染战绩播报卡片"""
