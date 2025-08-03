@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">🏭</div>
+        <div>
+            <h2 class="card-title">特勤处状态</h2>
+            <p class="card-subtitle">制造设备运行情况</p>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        {% for device in devices %}
+        <div class="info-group" style="{% if not loop.last %}margin-bottom: 20px;{% endif %}">
+            <div class="info-label">{{ device.place_name }}</div>
+            {% if device.status == 'idle' %}
+                <div class="badge badge-warning">闲置中</div>
+            {% else %}
+                <div class="info-value">{{ device.object_name }}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                    <span style="font-size: 14px; color: #666;">剩余时间: {{ device.left_time }}</span>
+                    <span class="badge badge-success">生产中</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ device.progress }}%;"></div>
+                </div>
+                <div style="font-size: 12px; color: #999; margin-top: 4px;">
+                    完成时间: {{ device.finish_time }}
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

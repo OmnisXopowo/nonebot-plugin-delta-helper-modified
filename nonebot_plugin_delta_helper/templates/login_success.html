@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">✓</div>
+        <div>
+            <h2 class="card-title">三角洲登录成功</h2>
+            <p class="card-subtitle">账号已成功绑定</p>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        <div class="info-group">
+            <div class="info-label">角色名</div>
+            <div class="info-value">{{ user_name }}</div>
+        </div>
+        
+        <div class="info-group">
+            <div class="info-label">当前现金</div>
+            <div class="info-value highlight">{{ money }}</div>
+        </div>
+        
+        <div class="info-group">
+            <div class="info-label">登录状态</div>
+            <div class="badge badge-success">有效期60天</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>⚠️ 在小程序登录会使当前登录状态失效</p>
+    </div>
+</div>
+{% endblock %}

@@ -8,8 +8,10 @@ from nonebot import get_plugin_config, on_command, require, get_driver
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 from nonebot.log import logger
 from nonebot.permission import SUPERUSER
+from nonebot.adapters.onebot.v11 import Message
 from nonebot.adapters.onebot.v11.event import MessageEvent, GroupMessageEvent
 from nonebot.exception import FinishedException
+from nonebot.params import CommandArg
 import datetime
 
 require("nonebot_plugin_saa")
@@ -22,12 +24,13 @@ from .deltaapi import DeltaApi
 from .db import UserDataDatabase
 from .model import UserData, SafehouseRecord
 from .util import Util
+from .render import get_renderer, close_renderer
 from . import migrations
 
 from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention, AggregatedMessageFactory
 from nonebot_plugin_orm import async_scoped_session, get_session
 from nonebot_plugin_apscheduler import scheduler
-from nonebot_plugin_limiter import UserScope, Cooldown, GlobalScope
+from nonebot_plugin_limiter import UserScope, Cooldown, GlobalScope, Increaser
 
 
 driver = get_driver()
@@ -58,7 +61,7 @@ __plugin_meta__ = PluginMetadata(
 config = get_plugin_config(Config)
 
 bind_delta_help = on_command("三角洲帮助")
-bind_delta_login = on_command("三角洲登录")
+bind_delta_login = on_command("三角洲登录", aliases={"三角洲登陆"})
 bind_delta_player_info = on_command("三角洲信息")
 bind_delta_password = on_command("三角洲密码")
 bind_delta_safehouse = on_command("三角洲特勤处")
@@ -70,6 +73,16 @@ bind_delta_ai_comment = on_command("三角洲AI锐评", aliases={"三角洲ai锐
 
 @bind_delta_help.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
+    try:
+        renderer = await get_renderer()
+        img_data = await renderer.render_card('help.html', {})
+        await Image(image=img_data).finish()
+    except FinishedException:
+        raise
+    except Exception as e:
+        logger.error(f"渲染帮助卡片失败: {e}")
+        # 降级到文本模式
+    
     await bind_delta_help.finish("""三角洲助手插件使用帮助：
 1. 三角洲登录：登录三角洲账号，需要用摄像头扫码，登录后会自动播报百万撤离或百万战损战绩
 2. 三角洲信息：查看三角洲基本信息
@@ -295,12 +308,24 @@ async def _(event: MessageEvent, session: async_scoped_session):
     res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
     try:
         if res['status']:
-            # logger.debug(f"角色信息：{res['data']}")
-            await bind_delta_player_info.finish(f"角色名：{res['data']['player']['charac_name']}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}", reply_message=True)
+            user_name = res['data']['player']['charac_name']
+            money = Util.trans_num_easy_for_read(res['data']['money'])
+            
+            try:
+                renderer = await get_renderer()
+                img_data = await renderer.render_player_info(user_name, money)
+                await Image(image=img_data).finish(reply=True)
+            except FinishedException:
+                raise
+            except Exception as e:
+                logger.error(f"渲染玩家信息卡片失败: {e}")
+                # 降级到文本模式
+            
+            await bind_delta_player_info.finish(f"角色名：{user_name}，现金：{money}", reply_message=True)
         else:
             await bind_delta_player_info.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
     except FinishedException:
-        pass
+        raise
     except Exception as e:
         logger.exception(f"查询角色信息失败")
         await bind_delta_player_info.finish(f"查询角色信息失败，可以需要重新登录\n详情请查看日志", reply_message=True)
@@ -313,10 +338,12 @@ async def _(event: MessageEvent, session: async_scoped_session):
         await bind_delta_safehouse.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
     deltaapi = DeltaApi()
     res = await deltaapi.get_safehousedevice_status(access_token=user_data.access_token, openid=user_data.openid)
-    message = None
+    
     if res['status']:
         place_data = res['data'].get('placeData', [])
         relate_map = res['data'].get('relateMap', {})
+        devices = []
+        
         for device in place_data:
             object_id = device.get('objectId', 0)
             left_time = device.get('leftTime', 0)
@@ -326,16 +353,48 @@ async def _(event: MessageEvent, session: async_scoped_session):
             if object_id > 0 and left_time > 0:
                 # 正在生产
                 object_name = relate_map.get(str(object_id), {}).get('objectName', f'物品{object_id}')
-                if not message:
-                    message = Text(f"{place_name}：{object_name}，剩余时间：{Util.seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
-                else:
-                    message += Text(f"\n{place_name}：{object_name}，剩余时间：{Util.seconds_to_duration(left_time)}，完成时间：{datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S')}")
+                # 计算进度百分比
+                total_time = device.get('totalTime', 0)
+                progress = 100 - (left_time / total_time * 100) if total_time > 0 else 0
+                
+                devices.append({
+                    'place_name': place_name,
+                    'status': 'producing',
+                    'object_name': object_name,
+                    'left_time': Util.seconds_to_duration(left_time),
+                    'finish_time': datetime.datetime.fromtimestamp(push_time).strftime('%m-%d %H:%M:%S'),
+                    'progress': progress
+                })
             else:
                 # 闲置状态
-                if not message:
-                    message = Text(f"{place_name}：闲置中")
-                else:
-                    message += Text(f"\n{place_name}：闲置中")
+                devices.append({
+                    'place_name': place_name,
+                    'status': 'idle'
+                })
+        
+        if devices:
+            try:
+                renderer = await get_renderer()
+                img_data = await renderer.render_safehouse(devices)
+                await Image(image=img_data).finish(reply=True)
+            except FinishedException:
+                raise
+            except Exception as e:
+                logger.error(f"渲染特勤处卡片失败: {e}")
+                # 降级到文本模式
+        
+        # 文本模式
+        message = None
+        for device_data in devices:
+            if device_data['status'] == 'producing':
+                text = f"{device_data['place_name']}：{device_data['object_name']}，剩余时间：{device_data['left_time']}，完成时间：{device_data['finish_time']}"
+            else:
+                text = f"{device_data['place_name']}：闲置中"
+                
+            if not message:
+                message = Text(text)
+            else:
+                message += Text(f"\n{text}")
         
         if message:
             await message.finish(reply=True)
@@ -555,26 +614,25 @@ async def _(event: MessageEvent, session: async_scoped_session):
     
     await bind_delta_weekly_report.finish("获取三角洲周报失败，可能需要重新登录或上周对局次数过少", reply_message=True)
 
-bypass_set = set()
-
 @bind_delta_ai_comment.handle(parameterless=[
     Cooldown(
         UserScope(
-            whitelist=tuple(bypass_set),
             permission=SUPERUSER
         ), 
         3600,
         limit = 1,
-        reject = "ai锐评功能对单个用户冷却时间60分钟，请稍后再试"
+        reject = "ai锐评功能对单个用户冷却时间60分钟，请稍后再试",
+        set_increaser = True
     ),
     Cooldown(
         GlobalScope(), 
         60,
         limit = 4,
-        reject = "ai锐评功能每分钟最多触发4次，请稍后再试"
+        reject = "ai锐评功能每分钟最多触发4次，请稍后再试",
+        set_increaser = True
     )
 ])
-async def _(event: MessageEvent, session: async_scoped_session):
+async def _(event: MessageEvent, session: async_scoped_session, increaser: Increaser):
     user_data_database = UserDataDatabase(session)
     user_data = await user_data_database.get_user_data(event.user_id)
     if user_data:
@@ -583,13 +641,11 @@ async def _(event: MessageEvent, session: async_scoped_session):
         await user_data_database.commit()
     else:
         await user_data_database.commit()
-        bypass_set.add(event.user_id)
         await bind_delta_ai_comment.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
    
     deltaapi = DeltaApi()
     res = await deltaapi.get_person_center_info(access_token=access_token, openid=openid)
     if not res['status']:
-        bypass_set.add(event.user_id)
         await bind_delta_ai_comment.finish("获取角色信息失败，可能需要重新登录", reply_message=True)
 
     person_center_info = res['data']
@@ -668,15 +724,13 @@ async def _(event: MessageEvent, session: async_scoped_session):
             }
             ]
         )
-        if event.user_id in bypass_set:
-            bypass_set.remove(event.user_id)
+        increaser.execute()
         if response.choices[0].message.content:
             msg = Mention(user_id=str(event.user_id)) + Text(' ') + Text(response.choices[0].message.content.strip())
             await msg.finish()
         else:
             logger.debug(f"AI锐评内容为空: {response.choices[0].message}")
             await bind_delta_ai_comment.finish("AI锐评内容为空，请查看日志", reply_message=True)
-    bypass_set.add(event.user_id)
 
 
 async def watch_record(user_name: str, qq_id: int):
@@ -874,4 +928,13 @@ async def initialize_plugin():
     """插件初始化"""
     # 启动战绩监控
     await start_watch_record()
+    await get_renderer()
     logger.info("三角洲助手插件初始化完成")
+
+# 关闭时清理
+@driver.on_shutdown
+async def cleanup_plugin():
+    """插件清理"""
+    # 关闭渲染器
+    await close_renderer()
+    logger.info("三角洲助手插件清理完成")

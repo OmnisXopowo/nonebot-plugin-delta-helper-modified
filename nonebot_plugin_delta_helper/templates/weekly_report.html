@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block extra_styles %}
+.chart-container {
+    margin: 16px 0;
+}
+
+.chart-bar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.chart-label {
+    width: 80px;
+    font-size: 14px;
+    color: #666;
+}
+
+.chart-value {
+    flex: 1;
+    background-color: #e5e7eb;
+    height: 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.chart-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+}
+
+.chart-text {
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">📈</div>
+        <div>
+            <h2 class="card-title">三角洲周报</h2>
+            <p class="card-subtitle">{{ user_name }} - {{ stat_date }}</p>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        <!-- 财务统计 -->
+        <div style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">财务统计</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">总带出</div>
+                    <div class="stat-value success">{{ gained_price }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">总带入</div>
+                    <div class="stat-value danger">{{ consume_price }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">净利润</div>
+                    <div class="stat-value {% if profit >= 0 %}success{% else %}danger{% endif %}">{{ profit_str }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">资产净增</div>
+                    <div class="stat-value {% if rise_price >= 0 %}success{% else %}danger{% endif %}">{{ rise_price_str }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 战斗统计 -->
+        <div style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">战斗统计</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">总场次</div>
+                    <div class="stat-value">{{ total_sol_num }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">在线时长</div>
+                    <div class="stat-value">{{ online_time }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">K/D</div>
+                    <div class="stat-value">{{ total_kill }}/{{ total_death }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">撤离率</div>
+                    <div class="stat-value">{{ evacuation_rate }}%</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 特殊成就 -->
+        {% if million_gained > 0 or million_consumed > 0 %}
+        <div style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">特殊成就</h3>
+            <div class="info-row">
+                <span class="info-label">百万撤离</span>
+                <span class="badge badge-success">{{ million_gained }}次</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">百万战损</span>
+                <span class="badge badge-danger">{{ million_consumed }}次</span>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- 干员使用统计 -->
+        {% if armed_forces %}
+        <div style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">干员使用TOP3</h3>
+            <div class="chart-container">
+                {% for force in armed_forces[:3] %}
+                <div class="chart-bar">
+                    <div class="chart-label">{{ force.name }}</div>
+                    <div class="chart-value">
+                        <div class="chart-fill" style="width: {{ force.percentage }}%;">
+                            <span class="chart-text">{{ force.count }}次</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- 地图游玩统计 -->
+        {% if maps %}
+        <div>
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">地图游玩TOP3</h3>
+            <div class="chart-container">
+                {% for map in maps[:3] %}
+                <div class="chart-bar">
+                    <div class="chart-label" style="width: 120px;">{{ map.name }}</div>
+                    <div class="chart-value">
+                        <div class="chart-fill" style="width: {{ map.percentage }}%;">
+                            <span class="chart-text">{{ map.count }}次</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if friend_rank %}
+    <div class="footer">
+        <p>好友排行榜：第{{ friend_rank }}名</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">🤖</div>
+        <div>
+            <h2 class="card-title">AI锐评</h2>
+            <p class="card-subtitle">{{ user_name }} - {{ date_range }}</p>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        <div style="background-color: #f9fafb; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+            <p style="font-size: 16px; line-height: 1.6; color: #333; white-space: pre-wrap;">{{ comment }}</p>
+        </div>
+        
+        {% if score %}
+        <div class="info-row" style="justify-content: center;">
+            <div class="stat-card" style="width: auto; padding: 12px 24px;">
+                <div class="stat-label">综合评分</div>
+                <div class="stat-value highlight">{{ score }}/10</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="footer">
+        <p>由 AI 基于玩家数据生成</p>
+    </div>
+</div>
+{% endblock %}

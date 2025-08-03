@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">👤</div>
+        <div>
+            <h2 class="card-title">{{ user_name }}</h2>
+            <p class="card-subtitle">三角洲账号详情</p>
+        </div>
+    </div>
+    
+    <div class="card-content">       
+        <div class="info-row">
+            <span class="info-label">现金</span>
+            <span class="info-value highlight">{{ money }}</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

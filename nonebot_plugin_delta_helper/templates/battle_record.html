@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">
+            {% if is_gain %}🏆{% else %}💀{% endif %}
+        </div>
+        <div>
+            <h2 class="card-title">
+                {% if is_gain %}战绩播报 - 撤离成功{% else %}战绩播报 - 战损{% endif %}
+            </h2>
+            <p class="card-subtitle">{{ user_name }} - {{ time }}</p>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        <div class="stat-card" style="margin-bottom: 16px;">
+            <div class="stat-label">
+                {% if is_gain %}撤离价值{% else %}战损价值{% endif %}
+            </div>
+            <div class="stat-value {% if is_gain %}success{% else %}danger{% endif %}" style="font-size: 32px;">
+                {{ price }}
+            </div>
+            {% if is_million %}
+            <div class="badge {% if is_gain %}badge-success{% else %}badge-danger{% endif %}" style="margin-top: 8px;">
+                {% if is_gain %}百万撤离{% else %}百万战损{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">地图</span>
+            <span class="info-value">{{ map_name }}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">使用干员</span>
+            <span class="info-value">{{ armed_force }}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">累计场次</span>
+            <span class="info-value">{{ total_count }}场</span>
+        </div>
+        
+        {% if is_gain %}
+        <div class="info-row">
+            <span class="info-label">累计撤离</span>
+            <span class="info-value success">{{ total_gain }}</span>
+        </div>
+        {% else %}
+        <div class="info-row">
+            <span class="info-label">累计战损</span>
+            <span class="info-value danger">{{ total_consume }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">📊</div>
+        <div>
+            <h2 class="card-title">三角洲日报</h2>
+            <p class="card-subtitle">{{ report_date }}</p>
+        </div>
+    </div>
+    
+    <div class="card-content">
+        <div class="stat-card" style="margin-bottom: 16px;">
+            <div class="stat-label">今日收益</div>
+            <div class="stat-value {% if gain < 0 %}danger{% else %}success{% endif %}">
+                {{ gain_str }}
+            </div>
+        </div>
+        
+        <div class="info-group">
+            <div class="info-label">价值最高藏品</div>
+            <div class="info-value" style="margin-top: 8px;">{{ collections }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
