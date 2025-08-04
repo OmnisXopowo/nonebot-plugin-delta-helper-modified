@@ -144,8 +144,96 @@ class CardRenderer:
             'collections': collections
         })
     
-    async def render_weekly_report(self, user_name: str, statDate_str: str, Gained_Price_Str: str, consume_Price_Str: str, rise_Price_Str: str, profit_str: str, total_ArmedForceId_num_list: list, total_mapid_num_list: list, friend_list: list) -> bytes:
+    async def render_weekly_report(
+        self,
+        user_name: str,
+        statDate_str: str,
+        Gained_Price_Str: str,
+        consume_Price_Str: str,
+        rise_Price_Str: str,
+        profit_str: str,
+        total_ArmedForceId_num_list: list,
+        total_mapid_num_list: list,
+        friend_list: list,
+        profit: int,
+        rise_price: int,
+        total_sol_num: int,
+        total_Online_Time_str: str,
+        total_Kill_Player: int,
+        total_Death_Count: int,
+        total_exacuation_num: str,
+        GainedPrice_overmillion_num: int = 0,
+        price_list: Optional[list] = None) -> bytes:
         """渲染周报卡片"""
+        from .util import Util
+        
+        if price_list is None:
+            price_list = []
+        
+        # 处理干员数据，转换为图表格式
+        armed_forces = []
+        if total_ArmedForceId_num_list:
+            max_count = max([item.get('inum', 0) for item in total_ArmedForceId_num_list]) if total_ArmedForceId_num_list else 1
+            for force in total_ArmedForceId_num_list:
+                force_name = Util.get_armed_force_name(force.get('ArmedForceId', 0))
+                force_count = force.get('inum', 0)
+                percentage = (force_count / max_count * 100) if max_count > 0 else 0
+                armed_forces.append({
+                    'name': force_name,
+                    'count': force_count,
+                    'percentage': percentage
+                })
+        
+        # 处理地图数据，转换为图表格式
+        maps = []
+        if total_mapid_num_list:
+            max_count = max([item.get('inum', 0) for item in total_mapid_num_list]) if total_mapid_num_list else 1
+            for map_info in total_mapid_num_list:
+                map_name = Util.get_map_name(map_info.get('MapId', 0))
+                map_count = map_info.get('inum', 0)
+                percentage = (map_count / max_count * 100) if max_count > 0 else 0
+                maps.append({
+                    'name': map_name,
+                    'count': map_count,
+                    'percentage': percentage
+                                })
+        
+        # 处理价格数据，转换为折线图格式
+        chart_data = []
+        weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        if price_list and len(price_list) >= 7:
+            # 转换价格为数值，处理可能的字符串格式
+            prices = []
+            for price in price_list[:7]:  # 只取前7天
+                try:
+                    # 移除可能的货币符号和逗号
+                    clean_price = str(price).replace(',', '').replace('¥', '').replace('$', '')
+                    prices.append(float(clean_price))
+                except (ValueError, TypeError):
+                    prices.append(0)
+            
+            if prices and max(prices) > 0:
+                min_price = min(prices)
+                max_price = max(prices)
+                price_range = max_price - min_price if max_price > min_price else 1
+                
+                for i, price in enumerate(prices):
+                    # 计算相对高度（10-90%范围内）
+                    height = ((price - min_price) / price_range * 80 + 10) if price_range > 0 else 50
+                    # 计算x位置，让点在网格列的中心
+                    x_pos = (i * 2 + 1) / 14 * 100  # 0-100范围内的位置
+                    # 反转高度，让低数值在下方，高数值在上方
+                    inverted_height = 100 - height
+                    chart_data.append({
+                        'day': weekdays[i],
+                        'price': price,
+                        'display_price': Util.trans_num_easy_for_read(int(price)),
+                        'height': round(inverted_height, 1),    # CSS用，反转高度
+                        'x_position': round(x_pos, 2),          # CSS用，百分比
+                        'svg_x': round(x_pos * 4, 2),           # SVG用，0-400数值（匹配viewBox宽度）
+                        'svg_y': round(inverted_height, 2)      # SVG用，0-100数值，同样反转
+                    })
+        
         return await self.render_card('weekly_report.html', {
             'user_name': user_name,
             'statDate_str': statDate_str,
@@ -153,9 +241,18 @@ class CardRenderer:
             'consume_Price_Str': consume_Price_Str,
             'rise_Price_Str': rise_Price_Str,
             'profit_str': profit_str,
-            'total_ArmedForceId_num_list': total_ArmedForceId_num_list,
-            'total_mapid_num_list': total_mapid_num_list,
-            'friend_list': friend_list
+            'profit': profit,
+            'rise_price': rise_price,
+            'total_sol_num': total_sol_num,
+            'online_time': total_Online_Time_str,
+            'total_kill': total_Kill_Player,
+            'total_death': total_Death_Count,
+            'total_exacuation_num': total_exacuation_num,
+            'million_gained': int(GainedPrice_overmillion_num),
+            'armed_forces': armed_forces,
+            'maps': maps,
+            'friend_list': friend_list,
+            'chart_data': chart_data
         })
     
     async def render_battle_record(self, data: dict) -> bytes:

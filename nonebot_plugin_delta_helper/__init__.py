@@ -108,7 +108,7 @@ def generate_record_id(record_data: dict) -> str:
     event_time = record_data.get('dtEventTime', '')
     return event_time
 
-async def format_record_message(record_data: dict, user_name: str) -> tuple[str, bytes]|None:
+async def format_record_message(record_data: dict, user_name: str) -> bytes|str|None:
     """格式化战绩播报消息"""
     try:
         # 解析时间
@@ -160,22 +160,26 @@ async def format_record_message(record_data: dict, user_name: str) -> tuple[str,
             message += f"💀 击杀干员: {kill_count}\n"
             message += f"💰 带出: {price_str}\n"
             message += f"💸 战损: {loss_str}"
-            
-            renderer = await get_renderer()
-            img_data = await renderer.render_battle_record({
-                'user_name': user_name,
-                'title': '百万撤离！',
-                'time': event_time,
-                'map_name': Util.get_map_name(map_id),
-                'result': result_str,
-                'duration': duration_str,
-                'kill_count': kill_count,
-                'price': price_str,
-                'loss': loss_str,
-                'is_gain': True,
-                'main_value': price_str
-            })
-            return message, img_data
+            try:
+                renderer = await get_renderer()
+                img_data = await renderer.render_battle_record({
+                    'user_name': user_name,
+                    'title': '百万撤离！',
+                    'time': event_time,
+                    'map_name': Util.get_map_name(map_id),
+                    'result': result_str,
+                    'duration': duration_str,
+                    'kill_count': kill_count,
+                    'price': price_str,
+                    'loss': loss_str,
+                    'is_gain': True,
+                    'main_value': price_str
+                })
+                return img_data
+            except Exception as e:
+                logger.exception(f"渲染战绩卡片失败: {e}")
+                # 降级到文本模式
+            return message
         elif loss_int > 1000000:
             message = f"🎯 {user_name} 百万战损！\n"
             message += f"⏰ 时间: {event_time}\n"
@@ -185,27 +189,29 @@ async def format_record_message(record_data: dict, user_name: str) -> tuple[str,
             message += f"💀 击杀干员: {kill_count}\n"
             message += f"💰 带出: {price_str}\n"
             message += f"💸 战损: {loss_str}"
-            
-            renderer = await get_renderer()
-            img_data = await renderer.render_battle_record({
-                'user_name': user_name,
-                'title': '百万战损！',
-                'time': event_time,
-                'map_name': Util.get_map_name(map_id),
-                'result': result_str,
-                'duration': duration_str,
-                'kill_count': kill_count,
-                'price': price_str,
-                'loss': loss_str,
-                'is_gain': False,
-                'main_value': loss_str
-            })
-            return message, img_data
+            try:
+                renderer = await get_renderer()
+                img_data = await renderer.render_battle_record({
+                    'user_name': user_name,
+                    'title': '百万战损！',
+                    'time': event_time,
+                    'map_name': Util.get_map_name(map_id),
+                    'result': result_str,
+                    'duration': duration_str,
+                    'kill_count': kill_count,
+                    'price': price_str,
+                    'loss': loss_str,
+                    'is_gain': False,
+                    'main_value': loss_str
+                })
+                return img_data
+            except Exception as e:
+                logger.exception(f"渲染战绩卡片失败: {e}")
+                # 降级到文本模式
+            return message
         else:
             return None
 
-        
-        return message
     except Exception as e:
         logger.exception(f"格式化战绩消息失败: {e}")
         return None
@@ -541,10 +547,6 @@ async def _(event: MessageEvent, session: async_scoped_session):
             consume_Price = int(res['data'].get('consume_Price', 0))
             consume_Price_Str = Util.trans_num_easy_for_read(consume_Price)
 
-            # 解析资产净增
-            rise_Price = int(res['data'].get('rise_Price', 0))
-            rise_Price_Str = f"{'-' if rise_Price < 0 else ''}{Util.trans_num_easy_for_read(abs(rise_Price))}"
-
             # 解析总利润
             profit = Gained_Price - consume_Price
             profit_str = f"{'-' if profit < 0 else ''}{Util.trans_num_easy_for_read(abs(profit))}"
@@ -564,6 +566,10 @@ async def _(event: MessageEvent, session: async_scoped_session):
                     return m.group(3)
                 return ""
             price_list = list(map(extract_price, Total_Price.split(',')))
+
+            # 解析资产净增
+            rise_Price = int(price_list[-1]) - int(price_list[0])
+            rise_Price_Str = f"{'-' if rise_Price < 0 else ''}{Util.trans_num_easy_for_read(abs(rise_Price))}"
 
             # 解析总场次
             total_sol_num = res['data'].get('total_sol_num', '0')
@@ -660,7 +666,12 @@ async def _(event: MessageEvent, session: async_scoped_session):
             msgs.append(message)
             try:
                 renderer = await get_renderer()
-                img_data = await renderer.render_weekly_report(user_name, statDate_str, Gained_Price_Str, consume_Price_Str, rise_Price_Str, profit_str, total_ArmedForceId_num_list, total_mapid_num_list, friend_list)
+                img_data = await renderer.render_weekly_report(
+                    user_name, statDate_str, Gained_Price_Str, consume_Price_Str, rise_Price_Str, profit_str,
+                    total_ArmedForceId_num_list, total_mapid_num_list, friend_list,
+                    profit, rise_Price,
+                    total_sol_num, total_Online_Time_str, total_Kill_Player,
+                    total_Death_Count, total_exacuation_num, GainedPrice_overmillion_num, price_list)
                 await Image(image=img_data).finish()
             except FinishedException:
                 raise
@@ -756,6 +767,8 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
 
             # 解析百万撤离次数
             GainedPrice_overmillion_num = res['data'].get('GainedPrice_overmillion_num', '0')
+        else:
+            continue
 
         proxy = httpx.Proxy(ai_proxy)
         httpx_client = httpx.AsyncClient(proxies=proxy)
@@ -835,15 +848,13 @@ async def watch_record(user_name: str, qq_id: int):
                     try:
                         if result:
                             if user_data.group_id != 0:
-                                if isinstance(result, tuple) and len(result) == 2:
+                                if isinstance(result, bytes):
                                     # 有卡片数据
-                                    message, img_data = result
+                                    img_data = result
                                     try:
                                         await Image(image=img_data).send_to(target=TargetQQGroup(group_id=user_data.group_id))
                                     except Exception as e:
                                         logger.error(f"发送战绩卡片失败: {e}")
-                                        # 降级到文本模式
-                                        await Text(message).send_to(target=TargetQQGroup(group_id=user_data.group_id))
                                 else:
                                     # 只有文本消息
                                     message = result

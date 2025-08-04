@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nonebot-plugin-delta-helper"
-version = "0.13.0"
+version = "0.14.0"
 description = ""
 authors = ["Irelia <1074822720@qq.com>"]
 license = "MIT"
@@ -17,6 +17,8 @@ nonebot-plugin-send-anything-anywhere = "^0.7.1"
 sqlalchemy = "^2.0.41"
 openai = "^1.98.0"
 nonebot-plugin-limiter = "^0.1.2"
+jinja2 = "^3.1.6"
+playwright = "^1.54.0"
 
 
 [build-system]

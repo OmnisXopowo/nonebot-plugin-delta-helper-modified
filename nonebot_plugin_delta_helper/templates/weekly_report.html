@@ -24,21 +24,95 @@
     border-radius: 4px;
     overflow: hidden;
     position: relative;
+    margin-right: 8px;
 }
 
 .chart-fill {
     height: 100%;
     background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 8px;
+    min-width: 2px;
 }
 
 .chart-text {
-    color: white;
+    color: #333;
     font-size: 12px;
     font-weight: 500;
+    white-space: nowrap;
+    min-width: 40px;
+    text-align: right;
+}
+
+.line-chart-container {
+    margin: 16px 0;
+    padding: 24px 16px 16px 16px;
+}
+
+.line-chart {
+    position: relative;
+    height: 120px;
+    margin: 16px 0;
+}
+
+.chart-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.chart-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.chart-line-path {
+    fill: none;
+    stroke: #667eea;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.chart-point {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #667eea;
+    border: 3px solid white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    z-index: 2;
+}
+
+.chart-x-axis {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-top: 12px;
+    font-size: 12px;
+    color: #666;
+}
+
+.chart-x-axis span {
+    text-align: center;
+}
+
+.price-label {
+    position: absolute;
+    background-color: rgba(102, 126, 234, 0.95);
+    color: white;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    transform: translate(-50%, -140%);
+    font-weight: 500;
+    z-index: 3;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 {% endblock %}
 
@@ -47,34 +121,60 @@
     <div class="card-header">
         <div class="card-icon">📈</div>
         <div>
-            <h2 class="card-title">三角洲周报</h2>
-            <p class="card-subtitle">{{ user_name }} - {{ stat_date }}</p>
+            <h2 class="card-title">{{ user_name }}</h2>
+            <p class="card-subtitle">三角洲周报 - {{ statDate_str }}</p>
         </div>
     </div>
     
     <div class="card-content">
         <!-- 财务统计 -->
         <div style="margin-bottom: 24px;">
-            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">财务统计</h3>
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">资产统计</h3>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">总带出</div>
-                    <div class="stat-value success">{{ gained_price }}</div>
+                    <div class="stat-value success">{{ Gained_Price_Str }}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">总带入</div>
-                    <div class="stat-value danger">{{ consume_price }}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">净利润</div>
-                    <div class="stat-value {% if profit >= 0 %}success{% else %}danger{% endif %}">{{ profit_str }}</div>
+                    <div class="stat-value danger">{{ consume_Price_Str }}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">资产净增</div>
-                    <div class="stat-value {% if rise_price >= 0 %}success{% else %}danger{% endif %}">{{ rise_price_str }}</div>
+                    <div class="stat-value {% if rise_price >= 0 %}success{% else %}danger{% endif %}">{{ rise_Price_Str }}</div>
                 </div>
             </div>
         </div>
+        
+        <!-- 资产变化趋势 -->
+        {% if chart_data %}
+        <div style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">资产变化趋势</h3>
+            <div class="line-chart-container">
+                <div class="line-chart">
+                    <!-- SVG折线 -->
+                    <svg class="chart-svg" viewBox="0 0 400 100" preserveAspectRatio="none">
+                        {% if chart_data|length > 1 %}
+                        <path class="chart-line-path" d="M {% for point in chart_data %}{{ point.svg_x|round(1) }} {{ point.svg_y|round(1) }}{% if not loop.last %} L {% endif %}{% endfor %}" vector-effect="non-scaling-stroke"></path>
+                        {% endif %}
+                    </svg>
+                    <!-- 数据点和标签 -->
+                    <div class="chart-line">
+                        {% for point in chart_data %}
+                        <div class="chart-point" style="left: {{ point.x_position }}%; top: {{ point.height }}%;">
+                            <div class="price-label">{{ point.display_price }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="chart-x-axis">
+                    {% for point in chart_data %}
+                    <span>{{ point.day }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
         
         <!-- 战斗统计 -->
         <div style="margin-bottom: 24px;">
@@ -93,40 +193,33 @@
                     <div class="stat-value">{{ total_kill }}/{{ total_death }}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">撤离率</div>
-                    <div class="stat-value">{{ evacuation_rate }}%</div>
+                    <div class="stat-label">撤离数</div>
+                    <div class="stat-value">{{ total_exacuation_num }}</div>
                 </div>
             </div>
         </div>
         
         <!-- 特殊成就 -->
-        {% if million_gained > 0 or million_consumed > 0 %}
         <div style="margin-bottom: 24px;">
             <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">特殊成就</h3>
             <div class="info-row">
                 <span class="info-label">百万撤离</span>
                 <span class="badge badge-success">{{ million_gained }}次</span>
             </div>
-            <div class="info-row">
-                <span class="info-label">百万战损</span>
-                <span class="badge badge-danger">{{ million_consumed }}次</span>
-            </div>
         </div>
-        {% endif %}
         
         <!-- 干员使用统计 -->
         {% if armed_forces %}
         <div style="margin-bottom: 24px;">
-            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">干员使用TOP3</h3>
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">干员使用</h3>
             <div class="chart-container">
-                {% for force in armed_forces[:3] %}
+                {% for force in armed_forces %}
                 <div class="chart-bar">
                     <div class="chart-label">{{ force.name }}</div>
                     <div class="chart-value">
-                        <div class="chart-fill" style="width: {{ force.percentage }}%;">
-                            <span class="chart-text">{{ force.count }}次</span>
-                        </div>
+                        <div class="chart-fill" style="width: {{ force.percentage }}%;"></div>
                     </div>
+                    <span class="chart-text">{{ force.count }}次</span>
                 </div>
                 {% endfor %}
             </div>
@@ -136,27 +229,56 @@
         <!-- 地图游玩统计 -->
         {% if maps %}
         <div>
-            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">地图游玩TOP3</h3>
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333;">地图游玩</h3>
             <div class="chart-container">
-                {% for map in maps[:3] %}
+                {% for map in maps %}
                 <div class="chart-bar">
                     <div class="chart-label" style="width: 120px;">{{ map.name }}</div>
                     <div class="chart-value">
-                        <div class="chart-fill" style="width: {{ map.percentage }}%;">
-                            <span class="chart-text">{{ map.count }}次</span>
-                        </div>
+                        <div class="chart-fill" style="width: {{ map.percentage }}%;"></div>
                     </div>
+                    <span class="chart-text">{{ map.count }}次</span>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
+        
+        <!-- 队友协作信息 -->
+        {% if friend_list %}
+        <div>
+            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #333;">队友协作情况</h3>
+            <p style="font-size: 12px; color: #666; margin-bottom: 16px;">注：KD为好友KD，带出和带入为本人的数据</p>
+            {% for friend in friend_list %}
+            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #667eea;">
+                <div style="font-weight: 600; color: #333; margin-bottom: 8px;">{{ friend.charac_name }}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                    <div>
+                        <span style="color: #666;">总览：</span>
+                        <span style="color: #333;">{{ friend.sol_num }}场 | {{ friend.escape_num }}撤离/{{ friend.fail_num }}失败</span>
+                    </div>
+                    <div>
+                        <span style="color: #666;">K/D：</span>
+                        <span style="color: #333;">{{ friend.kill_num }}杀/{{ friend.death_num }}死</span>
+                    </div>
+                    <div>
+                        <span style="color: #666;">带出：</span>
+                        <span style="color: #16a085;">{{ friend.gained_str }}</span>
+                    </div>
+                    <div>
+                        <span style="color: #666;">战损：</span>
+                        <span style="color: #e74c3c;">{{ friend.consume_str }}</span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px;">
+                    <span style="color: #666;">利润：</span>
+                    <span style="color: {% if friend.profit_str.startswith('-') %}#e74c3c{% else %}#16a085{% endif %}; font-weight: 500;">{{ friend.profit_str }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
     
-    {% if friend_rank %}
-    <div class="footer">
-        <p>好友排行榜：第{{ friend_rank }}名</p>
-    </div>
-    {% endif %}
 </div>
 {% endblock %}

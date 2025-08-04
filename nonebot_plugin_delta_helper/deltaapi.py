@@ -592,6 +592,7 @@ class DeltaApi:
                         # 合并数据
                         game_data[key].extend(data['jData']['data'])
                     elif data['ret'] != 0:
+                        logger.error(f"获取战绩失败: {data}")
                         return {'status': False, 'message': '获取失败', 'data': {}}
             
             return {'status': True, 'message': '获取成功', 'data': game_data}
@@ -625,6 +626,7 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
+                logger.error(f"获取特勤处状态失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
             logger.exception(f"获取特勤处状态失败: {e}")
@@ -660,6 +662,7 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
+                logger.error(f"获取物品信息失败: {data}")
                 return {'status': False, 'message': '获取失败', 'data': {}}
         except Exception as e:
             logger.exception(f"获取物品信息失败: {e}")
@@ -695,6 +698,7 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
+                logger.error(f"获取每日报告失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
             logger.exception(f"获取每日报告失败: {e}")
@@ -732,6 +736,7 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
+                logger.error(f"获取每周报告失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
             logger.exception(f"获取每周报告失败: {e}")
@@ -769,9 +774,10 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
+                logger.error(f"获取每周好友报告失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
-            logger.exception(f"获取每周报告失败: {e}")
+            logger.exception(f"获取每周好友报告失败: {e}")
             return {'status': False, 'message': '获取每周好友报告失败，详情请查看日志', 'data': {}}
 
     async def get_user_info(self, access_token: str, openid: str, access_type: str = 'qc', user_openid: str = ''):
@@ -802,6 +808,7 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']}
             else:
+                logger.error(f"获取用户信息失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
             logger.exception(f"获取用户信息失败: {e}")
@@ -838,7 +845,8 @@ class DeltaApi:
             if data['ret'] == 0:
                 return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']['solDetail']}
             else:
+                logger.error(f"获取用户中心信息失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
         except Exception as e:
-            logger.exception(f"获取用户信息失败: {e}")
+            logger.exception(f"获取用户中心信息失败: {e}")
             return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}
