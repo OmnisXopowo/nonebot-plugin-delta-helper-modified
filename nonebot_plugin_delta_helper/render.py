@@ -27,7 +27,26 @@ class CardRenderer:
         
     async def init(self):
         """初始化浏览器"""
-        if not self.browser:
+        # 检查浏览器是否需要初始化或重新初始化
+        need_init = False
+        
+        if not self.browser or not self.context:
+            need_init = True
+        else:
+            # 检查浏览器是否仍然有效
+            try:
+                # 尝试获取浏览器上下文信息来检查连接状态
+                contexts = self.browser.contexts
+                if contexts is None:
+                    raise Exception("浏览器上下文为空")
+            except Exception:
+                logger.warning("检测到浏览器连接已断开，将重新初始化")
+                need_init = True
+        
+        if need_init:
+            # 先清理可能存在的无效连接
+            await self._cleanup_invalid_browser()
+            
             try:
                 playwright = await async_playwright().start()
                 self.browser = await playwright.chromium.launch(
@@ -52,6 +71,23 @@ class CardRenderer:
                 logger.error(f"浏览器初始化失败: {e}")
                 raise RuntimeError(f"无法启动浏览器，请确保已安装 Playwright: {e}")
     
+    async def _cleanup_invalid_browser(self):
+        """清理无效的浏览器连接"""
+        try:
+            if self.context:
+                await self.context.close()
+        except Exception:
+            pass  # 忽略关闭过程中的错误
+        
+        try:
+            if self.browser:
+                await self.browser.close()
+        except Exception:
+            pass  # 忽略关闭过程中的错误
+        
+        self.context = None
+        self.browser = None
+    
     async def close(self):
         """关闭浏览器"""
         if self.context:
@@ -70,44 +106,66 @@ class CardRenderer:
         Returns:
             图片的二进制数据
         """
-        try:
-            # 确保浏览器已初始化
-            await self.init()
-            
-            # 渲染模板
-            template = self.env.get_template(template_name)
-            html = template.render(**data)
-            
-            # 创建新页面
-            if not self.context:
-                raise RuntimeError("浏览器未初始化")
-            page = await self.context.new_page()
-            
-            # 设置页面内容
-            await page.set_content(html)
-            
-            # 等待页面加载完成
-            await page.wait_for_load_state('networkidle')
-            
-            # 获取卡片元素
-            card_element = await page.query_selector('.card')
-            
-            # 截图
-            if not card_element:
-                raise RuntimeError("卡片元素未找到")
-            screenshot = await card_element.screenshot(
-                type='png',
-                omit_background=True
-            )
-            
-            # 关闭页面
-            await page.close()
-            
-            return screenshot
-            
-        except Exception as e:
-            logger.exception(f"渲染卡片失败: {e}")
-            raise
+        max_retries = 2
+        for attempt in range(max_retries):
+            page = None
+            try:
+                # 确保浏览器已初始化
+                await self.init()
+                
+                # 渲染模板
+                template = self.env.get_template(template_name)
+                html = template.render(**data)
+                
+                # 创建新页面
+                if not self.context:
+                    raise RuntimeError("浏览器未初始化")
+                page = await self.context.new_page()
+                
+                # 设置页面内容
+                await page.set_content(html)
+                
+                # 等待页面加载完成
+                await page.wait_for_load_state('networkidle')
+                
+                # 获取卡片元素
+                card_element = await page.query_selector('.card')
+                
+                # 截图
+                if not card_element:
+                    raise RuntimeError("卡片元素未找到")
+                screenshot = await card_element.screenshot(
+                    type='png',
+                    omit_background=True
+                )
+                
+                # 关闭页面
+                await page.close()
+                
+                return screenshot
+                
+            except Exception as e:
+                # 确保页面被关闭
+                if page:
+                    try:
+                        await page.close()
+                    except Exception:
+                        pass
+                
+                # 如果是浏览器连接问题，并且还有重试机会，则强制重新初始化
+                if (attempt < max_retries - 1 and 
+                    ("Target page, context or browser has been closed" in str(e) or
+                     "Browser" in str(e) or "Context" in str(e))):
+                    logger.warning(f"渲染失败，尝试重新初始化浏览器 (尝试 {attempt + 1}/{max_retries}): {e}")
+                    # 强制重新初始化
+                    await self._cleanup_invalid_browser()
+                    continue
+                else:
+                    logger.exception(f"渲染卡片失败: {e}")
+                    raise
+        
+        # 如果所有重试都失败了，抛出最后一个异常
+        raise RuntimeError("渲染卡片失败：所有重试都已用尽")
     
     async def render_login_success(self, user_name: str, money: str) -> bytes:
         """渲染登录成功卡片"""
@@ -276,9 +334,33 @@ _renderer: Optional[CardRenderer] = None
 async def get_renderer() -> CardRenderer:
     """获取渲染器实例"""
     global _renderer
+    
+    # 如果渲染器不存在，创建新的
     if _renderer is None:
         _renderer = CardRenderer()
         await _renderer.init()
+        return _renderer
+    
+    # 检查现有渲染器是否健康
+    try:
+        if _renderer.browser and _renderer.context:
+            # 尝试简单的健康检查
+            contexts = _renderer.browser.contexts
+            if contexts is not None:
+                return _renderer
+            else:
+                raise Exception("浏览器上下文为空")
+    except Exception:
+        logger.warning("检测到全局渲染器状态异常，重新创建")
+        
+    # 渲染器不健康，重新创建
+    try:
+        await _renderer.close()
+    except Exception:
+        pass  # 忽略关闭错误
+        
+    _renderer = CardRenderer()
+    await _renderer.init()
     return _renderer
 
 
