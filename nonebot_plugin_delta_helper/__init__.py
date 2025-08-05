@@ -282,68 +282,125 @@ async def _(event: MessageEvent, session: async_scoped_session):
     await bind_delta_safehouse_remind_close.finish("特勤处提醒功能已关闭", reply_message=True)
 
 @bind_delta_login.handle()
-async def _(event: MessageEvent, session: async_scoped_session):
-    deltaapi = DeltaApi()
-    res = await deltaapi.get_sig()
-    if not res['status']:
-        await bind_delta_login.finish(f"获取二维码失败：{res['message']}")
+async def _(event: MessageEvent, session: async_scoped_session, args: Message = CommandArg()):
+    platform = args.extract_plain_text()
+    if platform == "" or platform == "QQ" or platform == "qq":
+        platform = "qq"
+    elif platform == "微信":
+        platform = "wx"
+    else:
+        await bind_delta_login.finish("平台参数错误，请使用QQ或微信", reply_message=True)
+    deltaapi = DeltaApi(platform)
+    if platform == "qq":
+        res = await deltaapi.get_sig()
+        if not res['status']:
+            await bind_delta_login.finish(f"获取二维码失败：{res['message']}")
 
-    iamgebase64 = res['message']['image']
-    cookie = json.dumps(res['message']['cookie'])
-    # logger.debug(f"cookie: {cookie},type: {type(cookie)}")
-    qrSig = res['message']['qrSig']
-    qrToken = res['message']['token']
-    loginSig = res['message']['loginSig']
+        iamgebase64 = res['message']['image']
+        cookie = json.dumps(res['message']['cookie'])
+        # logger.debug(f"cookie: {cookie},type: {type(cookie)}")
+        qrSig = res['message']['qrSig']
+        qrToken = res['message']['token']
+        loginSig = res['message']['loginSig']
 
-    img = base64.b64decode(iamgebase64)
-    await (Text("请使用摄像头扫码") + Image(image=img)).send(reply=True)
+        img = base64.b64decode(iamgebase64)
+        await (Text("请打开手机qq使用摄像头扫码") + Image(image=img)).send(reply=True)
 
-    while True:
-        res = await deltaapi.get_login_status(cookie, qrSig, qrToken, loginSig)
-        if res['code'] == 0:
-            cookie = json.dumps(res['data']['cookie'])
-            # logger.debug(f"cookie: {cookie},type: {type(cookie)}")
-            res = await deltaapi.get_access_token(cookie)
-            if res['status']:
-                access_token = res['data']['access_token']
-                openid = res['data']['openid']
-                qq_id = event.user_id
-                if isinstance(event, GroupMessageEvent):
-                    group_id = event.group_id
-                else:
-                    group_id = 0
-                res = await deltaapi.bind(access_token=access_token, openid=openid)
-                if not res['status']:
-                    await bind_delta_login.finish(f"绑定失败：{res['message']}", reply_message=True)
-                res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
+        while True:
+            res = await deltaapi.get_login_status(cookie, qrSig, qrToken, loginSig)
+            if res['code'] == 0:
+                cookie = json.dumps(res['data']['cookie'])
+                # logger.debug(f"cookie: {cookie},type: {type(cookie)}")
+                res = await deltaapi.get_access_token(cookie)
                 if res['status']:
-                    user_data = UserData(qq_id=qq_id, group_id=group_id, access_token=access_token, openid=openid)
-                    user_data_database = UserDataDatabase(session)
-                    if not await user_data_database.add_user_data(user_data):
-                        await bind_delta_login.finish("保存用户数据失败，请稍查看日志", reply_message=True)
-                    await user_data_database.commit()
-                    user_name = res['data']['player']['charac_name']
-                    scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
-                    try:
-                        renderer = await get_renderer()
-                        img_data = await renderer.render_login_success(user_name, Util.trans_num_easy_for_read(res['data']['money']))
-                        await Image(image=img_data).finish(reply=True)
-                    except FinishedException:
-                        raise
-                    except Exception as e:
-                        logger.error(f"渲染登录成功卡片失败: {e}")
-                        # 降级到文本模式
-                    await bind_delta_login.finish(f"登录成功，角色名：{user_name}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}\n登录有效期60天，在小程序登录会使这里的登录状态失效", reply_message=True)
-                    
+                    access_token = res['data']['access_token']
+                    openid = res['data']['openid']
+                    qq_id = event.user_id
+                    if isinstance(event, GroupMessageEvent):
+                        group_id = event.group_id
+                    else:
+                        group_id = 0
+                    res = await deltaapi.bind(access_token=access_token, openid=openid)
+                    if not res['status']:
+                        await bind_delta_login.finish(f"绑定失败：{res['message']}", reply_message=True)
+                    res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
+                    if res['status']:
+                        user_data = UserData(qq_id=qq_id, group_id=group_id, access_token=access_token, openid=openid, platform=platform)
+                        user_data_database = UserDataDatabase(session)
+                        if not await user_data_database.add_user_data(user_data):
+                            await bind_delta_login.finish("保存用户数据失败，请稍查看日志", reply_message=True)
+                        await user_data_database.commit()
+                        user_name = res['data']['player']['charac_name']
+                        scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                        try:
+                            renderer = await get_renderer()
+                            img_data = await renderer.render_login_success(user_name, Util.trans_num_easy_for_read(res['data']['money']))
+                            await Image(image=img_data).finish(reply=True)
+                        except FinishedException:
+                            raise
+                        except Exception as e:
+                            logger.error(f"渲染登录成功卡片失败: {e}")
+                            # 降级到文本模式
+                        await bind_delta_login.finish(f"登录成功，角色名：{user_name}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}\n登录有效期60天，在小程序登录会使这里的登录状态失效", reply_message=True)
+                        
+                    else:
+                        await bind_delta_login.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
                 else:
-                    await bind_delta_login.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
-            else:
-                await bind_delta_login.finish(f"登录失败：{res['message']}", reply_message=True)
+                    await bind_delta_login.finish(f"登录失败：{res['message']}", reply_message=True)
 
-        elif res['code'] == -4 or res['code'] == -2 or res['code'] == -3:
-            await bind_delta_login.finish(f"登录失败：{res['message']}", reply_message=True)
-        
-        await asyncio.sleep(0.5)
+            elif res['code'] == -4 or res['code'] == -2 or res['code'] == -3:
+                await bind_delta_login.finish(f"登录失败：{res['message']}", reply_message=True)
+            
+            await asyncio.sleep(0.5)
+
+    elif platform == "wx":
+        res = await deltaapi.get_wechat_login_qr()
+        if not res['status']:
+            await bind_delta_login.finish(f"获取二维码失败：{res['message']}")
+        img_url = res['data']['qrCode']
+        uuid = res['data']['uuid']
+        await (Text("请打开手机微信使用摄像头扫码") + Image(image=img_url)).send(reply=True)
+        while True:
+            res = await deltaapi.check_wechat_login_status(uuid)
+            if res['status'] and res['code'] == 3:
+                wx_code = res['data']['wx_code']
+                res = await deltaapi.get_wechat_access_token(wx_code)
+                if res['status']:
+                    access_token = res['data']['access_token']
+                    openid = res['data']['openid']
+                    qq_id = event.user_id
+                    if isinstance(event, GroupMessageEvent):
+                        group_id = event.group_id
+                    res = await deltaapi.bind(access_token=access_token, openid=openid)
+                    if not res['status']:
+                        await bind_delta_login.finish(f"绑定失败：{res['message']}", reply_message=True)
+                    res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
+                    if res['status']:
+                        user_data = UserData(qq_id=qq_id, group_id=group_id, access_token=access_token, openid=openid, platform=platform)
+                        user_data_database = UserDataDatabase(session)
+                        if not await user_data_database.add_user_data(user_data):
+                            await bind_delta_login.finish("保存用户数据失败，请稍查看日志", reply_message=True)
+                        await user_data_database.commit()
+                        user_name = res['data']['player']['charac_name']
+                        scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                        try:
+                            renderer = await get_renderer()
+                            img_data = await renderer.render_login_success(user_name, Util.trans_num_easy_for_read(res['data']['money']))
+                            await Image(image=img_data).finish(reply=True)
+                        except FinishedException:
+                            raise
+                        except Exception as e:
+                            logger.error(f"渲染登录成功卡片失败: {e}")
+                            # 降级到文本模式
+                        await bind_delta_login.finish(f"登录成功，角色名：{user_name}，现金：{Util.trans_num_easy_for_read(res['data']['money'])}\n登录有效期60天，在小程序登录会使这里的登录状态失效", reply_message=True)
+                    else:
+                        await bind_delta_login.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
+                else:
+                    await bind_delta_login.finish(f"登录失败：{res['message']}", reply_message=True)
+
+            elif not res['status']:
+                await bind_delta_login.finish(f"登录失败：{res['message']}", reply_message=True)
+            await asyncio.sleep(0.5)
 
 @bind_delta_player_info.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -351,7 +408,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     user_data = await user_data_database.get_user_data(event.user_id)
     if not user_data:
         await bind_delta_player_info.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
-    deltaapi = DeltaApi()
+    deltaapi = DeltaApi(user_data.platform)
     res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
     try:
         if res['status']:
@@ -383,7 +440,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     user_data = await user_data_database.get_user_data(event.user_id)
     if not user_data:
         await bind_delta_safehouse.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
-    deltaapi = DeltaApi()
+    deltaapi = DeltaApi(user_data.platform)
     res = await deltaapi.get_safehousedevice_status(access_token=user_data.access_token, openid=user_data.openid)
     
     if res['status']:
@@ -455,7 +512,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     user_data_database = UserDataDatabase(session)
     user_data_list = await user_data_database.get_user_data_list()
     for user_data in user_data_list:
-        deltaapi = DeltaApi()
+        deltaapi = DeltaApi(user_data.platform)
         res = await deltaapi.get_password(user_data.access_token, user_data.openid)
         msgs = None
         password_list = res['data'].get('list', [])
@@ -475,7 +532,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
     user_data = await user_data_database.get_user_data(event.user_id)
     if not user_data:
         await bind_delta_daily_report.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
-    deltaapi = DeltaApi()
+    deltaapi = DeltaApi(user_data.platform)
     res = await deltaapi.get_daily_report(user_data.access_token, user_data.openid)
     if res['status']:
         solDetail = res['data'].get('solDetail', None)
@@ -528,8 +585,9 @@ async def _(event: MessageEvent, session: async_scoped_session):
         await bind_delta_weekly_report.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
     access_token = user_data.access_token
     openid = user_data.openid
+    platform = user_data.platform
     await user_data_database.commit()
-    deltaapi = DeltaApi()
+    deltaapi = DeltaApi(platform)
     res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
     if res['status'] and 'charac_name' in res['data']['player']:
         user_name = res['data']['player']['charac_name']
@@ -708,12 +766,13 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
     if user_data:
         access_token = user_data.access_token
         openid = user_data.openid
+        platform = user_data.platform
         await user_data_database.commit()
     else:
         await user_data_database.commit()
         await bind_delta_ai_comment.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
    
-    deltaapi = DeltaApi()
+    deltaapi = DeltaApi(platform)
     res = await deltaapi.get_person_center_info(access_token=access_token, openid=openid)
     if not res['status']:
         await bind_delta_ai_comment.finish("获取角色信息失败，可能需要重新登录", reply_message=True)
@@ -769,9 +828,11 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
             GainedPrice_overmillion_num = res['data'].get('GainedPrice_overmillion_num', '0')
         else:
             continue
-
-        proxy = httpx.Proxy(ai_proxy)
-        httpx_client = httpx.AsyncClient(proxies=proxy)
+        
+        if ai_proxy:
+            httpx_client = httpx.AsyncClient(proxy=ai_proxy)
+        else:
+            httpx_client = httpx.AsyncClient()
         client = AsyncOpenAI(
             api_key=ai_api_key,
             base_url=ai_base_url,
@@ -810,7 +871,7 @@ async def watch_record(user_name: str, qq_id: int):
     user_data_database = UserDataDatabase(session)
     user_data = await user_data_database.get_user_data(qq_id)
     if user_data:
-        deltaapi = DeltaApi()
+        deltaapi = DeltaApi(user_data.platform)
         # logger.debug(f"开始获取玩家{user_name}的战绩")
         res = await deltaapi.get_record(user_data.access_token, user_data.openid)
         if res['status']:
@@ -905,7 +966,7 @@ async def watch_safehouse(qq_id: int):
         return
     
     try:
-        deltaapi = DeltaApi()
+        deltaapi = DeltaApi(user_data.platform)
         res = await deltaapi.get_safehousedevice_status(user_data.access_token, user_data.openid)
         
         if not res['status']:
@@ -978,7 +1039,7 @@ async def start_watch_record():
     user_data_database = UserDataDatabase(session)
     user_data_list = await user_data_database.get_user_data_list()
     for user_data in user_data_list:
-        deltaapi = DeltaApi()
+        deltaapi = DeltaApi(user_data.platform)
         try:
             # 提前获取所有需要的属性，避免在调度器中访问ORM对象
             qq_id = user_data.qq_id

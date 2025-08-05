@@ -5,6 +5,7 @@ import time
 import base64
 import json
 import urllib.parse
+import re
 from .util import Util
 
 CONSTANTS = {
@@ -23,7 +24,8 @@ CONSTANTS = {
 }
 
 class DeltaApi:
-    def __init__(self):
+    def __init__(self, platform: str = 'qq'):
+        self.platform = platform
         self.client = httpx.AsyncClient(timeout=200)
 
     async def close(self):
@@ -337,14 +339,15 @@ class DeltaApi:
             logger.exception(f"获取access token失败: {e}")
             return {'status': False, 'message': 'AccessToken获取失败', 'data': {}}
 
-    async def bind(self, access_token: str, openid: str, access_type: str = 'qc'):
+    async def bind(self, access_token: str, openid: str):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
             
             # 第一步：检查是否已绑定
@@ -366,7 +369,7 @@ class DeltaApi:
                 # 获取角色信息
                 params = {
                     'needGopenid': 1,
-                    'sAMSAcctype': 'qq' if access_type == 'qc' else 'wx',
+                    'sAMSAcctype': access_type,
                     'sAMSAccessToken': access_token,
                     'sAMSAppOpenId': openid,
                     'sAMSSourceAppId': '101491592',
@@ -445,14 +448,15 @@ class DeltaApi:
             logger.exception(f"绑定失败: {e}")
             return {'status': False, 'message': '绑定失败，详情请查看日志', 'data': {}}
 
-    async def get_player_info(self, access_token: str, openid: str, season_id: int = 0, access_type: str = 'qc'):
+    async def get_player_info(self, access_token: str, openid: str, season_id: int = 0):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
             headers = CONSTANTS['REQUEST_HEADERS_BASE']
             
@@ -514,14 +518,15 @@ class DeltaApi:
             return {'status': False, 'message': '获取玩家信息失败，详情请查看日志', 'data': {}}
 
 
-    async def get_password(self, access_token: str, openid: str, access_type: str = 'qc'):
+    async def get_password(self, access_token: str, openid: str):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
             
             # 发送请求获取密码信息
@@ -546,21 +551,22 @@ class DeltaApi:
             logger.exception(f"获取密码失败: {e}")
             return {'status': False, 'message': '获取密码失败，详情请查看日志', 'data': {}}
 
-    async def get_record(self, access_token: str, openid: str, access_type: str = 'qc'):
+    async def get_record(self, access_token: str, openid: str):
         """
         获取战绩记录
         :param openid: openid
         :param access_token: access_token
-        :param access_type: 登录类型，默认为'qc'
+        :param access_type: 登录类型，默认为'qq'
         :return: 战绩记录
         """
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
             
             # 初始化游戏数据
@@ -601,14 +607,15 @@ class DeltaApi:
             logger.exception(f"获取战绩失败: {e}")
             return {'status': False, 'message': '获取战绩失败，详情请查看日志', 'data': {}}
 
-    async def get_safehousedevice_status(self, access_token: str, openid: str, access_type: str = 'qc'):
+    async def get_safehousedevice_status(self, access_token: str, openid: str):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
 
             # 发送请求获取设备状态
@@ -632,14 +639,15 @@ class DeltaApi:
             logger.exception(f"获取特勤处状态失败: {e}")
             return {'status': False, 'message': '获取特勤处状态失败，详情请查看日志', 'data': {}}
 
-    async def get_object_info(self, access_token: str, openid: str, access_type: str = 'qc', object_id: str = ''):
+    async def get_object_info(self, access_token: str, openid: str, object_id: str = ''):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token or not object_id:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
 
             # 发送请求获取物品信息
@@ -668,14 +676,15 @@ class DeltaApi:
             logger.exception(f"获取物品信息失败: {e}")
             return {'status': False, 'message': '获取物品信息失败，详情请查看日志', 'data': {}}
 
-    async def get_daily_report(self, access_token: str, openid: str, access_type: str = 'qc'):
+    async def get_daily_report(self, access_token: str, openid: str):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
 
             # 发送请求获取每日报告
@@ -704,14 +713,15 @@ class DeltaApi:
             logger.exception(f"获取每日报告失败: {e}")
             return {'status': False, 'message': '获取每日报告失败，详情请查看日志', 'data': {}}
 
-    async def get_weekly_report(self, access_token: str, openid: str, access_type: str = 'qc', statDate: str = ''):
+    async def get_weekly_report(self, access_token: str, openid: str, statDate: str = ''):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token or not statDate:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
             
             # 发送请求获取每周报告
@@ -742,14 +752,15 @@ class DeltaApi:
             logger.exception(f"获取每周报告失败: {e}")
             return {'status': False, 'message': '获取每周报告失败，详情请查看日志', 'data': {}}
 
-    async def get_weekly_friend_report(self, access_token: str, openid: str, access_type: str = 'qc', statDate: str = ''):
+    async def get_weekly_friend_report(self, access_token: str, openid: str, statDate: str = ''):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token or not statDate:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
 
             # 发送请求获取每周好友报告
@@ -780,14 +791,15 @@ class DeltaApi:
             logger.exception(f"获取每周好友报告失败: {e}")
             return {'status': False, 'message': '获取每周好友报告失败，详情请查看日志', 'data': {}}
 
-    async def get_user_info(self, access_token: str, openid: str, access_type: str = 'qc', user_openid: str = ''):
+    async def get_user_info(self, access_token: str, openid: str, user_openid: str = ''):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token or not user_openid:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
 
             # 发送请求获取用户信息
@@ -814,14 +826,15 @@ class DeltaApi:
             logger.exception(f"获取用户信息失败: {e}")
             return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}
 
-    async def get_person_center_info(self, access_token: str, openid: str, access_type: str = 'qc'):
+    async def get_person_center_info(self, access_token: str, openid: str):
+        access_type = self.platform
         try:
             # 参数验证
             if not openid or not access_token:
                 return {'status': False, 'message': '缺少参数', 'data': {}}
             
             # 创建cookie
-            is_qq = access_type == 'qc'
+            is_qq = access_type == 'qq'
             cookies = self.create_cookie(openid, access_token, is_qq)
 
             # 发送请求获取用户信息
@@ -850,3 +863,213 @@ class DeltaApi:
         except Exception as e:
             logger.exception(f"获取用户中心信息失败: {e}")
             return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}
+
+    async def get_wechat_login_qr(self):
+        """
+        获取微信登录二维码
+        返回包含二维码URL和UUID的字典
+        """
+        try:
+            # 构建请求参数
+            params = {
+                'appid': 'wxfa0c35392d06b82f',
+                'scope': 'snsapi_login',
+                'redirect_uri': 'https://iu.qq.com/comm-htdocs/login/milosdk/wx_pc_redirect.html?appid=wxfa0c35392d06b82f&sServiceType=undefined&originalUrl=https%3A%2F%2Fdf.qq.com%2Fcp%2Frecord202410ver%2F&oriOrigin=https%3A%2F%2Fdf.qq.com',
+                'state': 1,
+                'login_type': 'jssdk',
+                'self_redirect': 'true',
+                'ts': self.get_micro_time(),
+                'style': 'black',
+            }
+            
+            # 设置请求头
+            headers = {
+                'referer': 'https://df.qq.com/',
+            }
+            
+            # 发送GET请求
+            url = 'https://open.weixin.qq.com/connect/qrconnect'
+            response = await self.client.get(url, params=params, headers=headers)
+            
+            # 获取响应内容
+            result = response.text
+            
+            # 使用正则表达式提取二维码URL
+            qrcode_pattern = r'/connect/qrcode/[^\s<>"]+'
+            qrcode_match = re.search(qrcode_pattern, result)
+            
+            if not qrcode_match:
+                logger.error(f"提取二维码URL失败，响应内容: {result[:500]}...")
+                return {'status': False, 'message': '获取二维码失败', 'data': {}}
+            
+            qrcode_path = qrcode_match.group(0)
+            uuid = qrcode_path[16:]  # 从第16个字符开始截取UUID
+            qrcode_url = 'https://open.weixin.qq.com' + qrcode_path
+            
+            # 返回成功响应
+            return {
+                'status': True, 
+                'message': '获取成功', 
+                'data': {
+                    'qrCode': qrcode_url,
+                    'uuid': uuid,
+                }
+            }
+            
+        except Exception as e:
+            logger.exception(f"获取微信登录二维码失败: {e}")
+            return {'status': False, 'message': '获取微信登录二维码失败，详情请查看日志', 'data': {}}
+
+    async def check_wechat_login_status(self, uuid: str):
+        """
+        检查微信登录状态
+        
+        Args:
+            uuid: 从get_wechat_login_qr方法获取的UUID
+            
+        Returns:
+            dict: 包含登录状态信息的字典
+        """
+        if not uuid or uuid == '':
+            return {'status': False, 'message': '缺少参数', 'code': -1, 'data': {}}
+        
+        try:
+            # 构建请求参数
+            params = {
+                'uuid': uuid,
+            }
+            
+            # 发送GET请求检查登录状态
+            url = 'https://lp.open.weixin.qq.com/connect/l/qrconnect'
+            response = await self.client.get(url, params=params)
+            
+            # 获取响应内容
+            result = response.text
+            
+            # 使用正则表达式提取错误码和代码
+            errcode_pattern = r'wx_errcode=(\d+);'
+            code_pattern = r'wx_code=\'([^\']*)\';'
+            
+            errcode_match = re.search(errcode_pattern, result)
+            code_match = re.search(code_pattern, result)
+            
+            wx_errcode = int(errcode_match.group(1)) if errcode_match else None
+            wx_code = code_match.group(1) if code_match else None
+            
+            logger.info(f"微信登录状态检查 - UUID: {uuid}, errcode: {wx_errcode}, code: {wx_code}")
+            
+            # 根据错误码返回不同的状态
+            if wx_errcode == 402:
+                return {'status': False, 'message': '二维码超时', 'code': -2, 'data': {}}
+            
+            if wx_errcode == 408:
+                return {'status': True, 'message': '等待扫描', 'code': 1, 'data': {}}
+            
+            if wx_errcode == 404:
+                return {'status': True, 'message': '已扫码', 'code': 2, 'data': {}}
+            
+            if wx_errcode == 405:
+                return {
+                    'status': True, 
+                    'message': '扫码成功', 
+                    'code': 3, 
+                    'data': {
+                        'wx_errcode': wx_errcode,
+                        'wx_code': wx_code,
+                    }
+                }
+            
+            if wx_errcode == 403:
+                return {'status': False, 'message': '扫码被拒绝', 'code': -3, 'data': {}}
+            
+            # 其他错误代码
+            logger.error(f"微信登录状态检查 - UUID: {uuid}, errcode: {wx_errcode}, code: {wx_code}")
+            return {
+                'status': False, 
+                'message': '其他错误代码', 
+                'code': -4, 
+                'data': {
+                    'wx_errcode': wx_errcode,
+                    'wx_code': wx_code,
+                }
+            }
+            
+        except Exception as e:
+            logger.exception(f"检查微信登录状态失败: {e}")
+            return {'status': False, 'message': '检查微信登录状态失败，详情请查看日志', 'code': -5, 'data': {}}
+
+    async def get_wechat_access_token(self, code: str):
+        """
+        获取微信访问令牌
+        
+        Args:
+            code: 从check_wechat_login_status方法获取的wx_code
+            
+        Returns:
+            dict: 包含访问令牌信息的字典
+        """
+        if not code or code == '':
+            return {'status': False, 'message': '缺少参数', 'data': {}}
+        
+        try:
+            # 构建请求参数
+            params = {
+                'callback': '',
+                'appid': 'wxfa0c35392d06b82f',
+                'wxcode': code,
+                'originalUrl': 'https://df.qq.com/cp/record202410ver/',
+                'wxcodedomain': 'iu.qq.com',
+                'acctype': 'wx',
+                'sServiceType': 'undefined',
+                '_': self.get_micro_time(),
+            }
+            
+            # 设置请求头
+            headers = {
+                'referer': 'https://df.qq.com/',
+            }
+            
+            # 发送GET请求获取访问令牌
+            url = 'https://apps.game.qq.com/ams/ame/codeToOpenId.php'
+            response = await self.client.get(url, params=params, headers=headers)
+            
+            # 获取响应内容
+            result = response.text
+            
+            # 解析JSON响应
+            try:
+                data = json.loads(result)
+            except json.JSONDecodeError as e:
+                logger.error(f"解析JSON响应失败: {e}, 响应内容: {result}")
+                return {'status': False, 'message': '响应数据格式错误', 'data': {}}
+            
+            # 检查返回状态
+            if data.get('iRet') == 0:
+                # 解析内层JSON数据
+                try:
+                    token_data = json.loads(data['sMsg'])
+                    
+                    logger.info(f"微信访问令牌获取成功，openid: {token_data.get('openid', 'unknown')}")
+                    
+                    return {
+                        'status': True,
+                        'message': '获取成功',
+                        'data': {
+                            'access_token': token_data.get('access_token'),
+                            'refresh_token': token_data.get('refresh_token'),
+                            'openid': token_data.get('openid'),
+                            'unionid': token_data.get('unionid'),
+                            'expires_in': token_data.get('expires_in'),
+                        }
+                    }
+                except json.JSONDecodeError as e:
+                    logger.error(f"解析内层JSON数据失败: {e}, 数据: {data['sMsg']}")
+                    return {'status': False, 'message': '令牌数据解析失败', 'data': {}}
+            else:
+                error_msg = data.get('sMsg', '未知错误')
+                logger.error(f"获取微信访问令牌失败: {error_msg}")
+                return {'status': False, 'message': f'获取失败: {error_msg}', 'data': {}}
+            
+        except Exception as e:
+            logger.exception(f"获取微信访问令牌失败: {e}")
+            return {'status': False, 'message': '获取微信访问令牌失败，详情请查看日志', 'data': {}}
