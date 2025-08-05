@@ -840,7 +840,7 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
         )
 
         response = await client.chat.completions.create(
-        model="gemini-2.5-pro",
+        model=ai_model,
         messages=[
             {"role": "system", "content": "你是一个AI助手。"},
             {
