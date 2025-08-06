@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card">
+<div class="card player-card">
     <div class="card-header">
         <div class="card-icon">👤</div>
         <div>
@@ -10,11 +10,202 @@
         </div>
     </div>
     
-    <div class="card-content">       
-        <div class="info-row">
-            <span class="info-label">现金</span>
-            <span class="info-value highlight">{{ money }}</span>
+    <div class="card-content">
+        <!-- 账户信息 -->
+        <div class="section">
+            <h3 class="section-title">💰 账户信息</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">现金</span>
+                    <span class="info-value highlight">{{ money }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">仓库流动资产</span>
+                    <span class="info-value">{{ propcapital }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 烽火数据 -->
+        <div class="section">
+            <h3 class="section-title">🔥 烽火数据</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">总场数</span>
+                    <span class="info-value">{{ soltotalfght }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">撤离数</span>
+                    <span class="info-value">{{ solttotalescape }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">撤离率</span>
+                    <span class="info-value">{{ solescaperatio }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">总击杀</span>
+                    <span class="info-value">{{ soltotalkill }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">排位分</span>
+                    <span class="info-value highlight">{{ rankpoint }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">游戏时长</span>
+                    <span class="info-value">{{ totalGameTime }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">赚损比</span>
+                    <span class="info-value">{{ profitLossRatio }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">总带出</span>
+                    <span class="info-value">{{ totalGainedPrice }}</span>
+                </div>
+            </div>
+            <div class="kd-section">
+                <span class="info-label">KD：</span>
+                <span class="kd-values">
+                    <span class="kd-item">常规 {{ lowKillDeathRatio }}</span>
+                    <span class="kd-item">机密 {{ medKillDeathRatio }}</span>
+                    <span class="kd-item">绝密 {{ highKillDeathRatio }}</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- 战场数据 -->
+        <div class="section">
+            <h3 class="section-title">⚔️ 战场数据</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">总场数</span>
+                    <span class="info-value">{{ tdmtotalfight }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">总胜场</span>
+                    <span class="info-value">{{ totalwin }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">胜率</span>
+                    <span class="info-value">{{ tdmsuccessratio }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">总击杀</span>
+                    <span class="info-value">{{ tdmtotalkill }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">排位分</span>
+                    <span class="info-value highlight">{{ tdmrankpoint }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">游戏时长</span>
+                    <span class="info-value">{{ tdmduration }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">分均击杀</span>
+                    <span class="info-value">{{ avgkillperminute }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">分均得分</span>
+                    <span class="info-value">{{ avgScorePerMinute }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">摧毁载具</span>
+                    <span class="info-value">{{ totalVehicleDestroyed }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">载具击杀</span>
+                    <span class="info-value">{{ totalVehicleKill }}</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+.player-card {
+    max-width: 600px;
+    padding: 16px;
+}
+
+.section {
+    margin-bottom: 16px;
+}
+
+.section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #222;
+    margin-bottom: 10px;
+    padding: 6px 8px;
+    border-bottom: 2px solid #667eea;
+    background: linear-gradient(90deg, #f8f9fa 0%, transparent 100%);
+    border-radius: 4px 4px 0 0;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px 12px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    min-height: 36px;
+    padding: 4px 6px;
+    background: rgba(248, 249, 250, 0.5);
+    border-radius: 4px;
+}
+
+.info-label {
+    font-size: 13px;
+    color: #333;
+    font-weight: 700;
+    margin-bottom: 3px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.info-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+}
+
+.info-value.highlight {
+    color: #667eea;
+    font-weight: 700;
+}
+
+.kd-section {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: linear-gradient(135deg, #f0f2ff 0%, #e8ebff 100%);
+    border-radius: 8px;
+    font-size: 12px;
+    border: 1px solid #d0d7ff;
+}
+
+.kd-section .info-label {
+    color: #222;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.kd-values {
+    margin-left: 8px;
+}
+
+.kd-item {
+    margin-right: 12px;
+    color: #555;
+    font-weight: 500;
+}
+
+@media (max-width: 480px) {
+    .info-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
 {% endblock %}

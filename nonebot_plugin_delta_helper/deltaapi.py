@@ -181,7 +181,6 @@ class DeltaApi:
                 return {'code': -1, 'message': 'qrSig参数不正确', 'data': {}}
             
             # 使用正则表达式解析ptuiCB响应
-            import re
             pattern = r"ptuiCB\s*\(\s*'(.*?)'\s*,\s*'(.*?)'\s*,\s*'(.*?)'\s*,\s*'(.*?)'\s*,\s*'(.*?)'\s*,\s*'(.*?)'\s*\)"
             matches = re.search(pattern, result)
             
@@ -275,7 +274,6 @@ class DeltaApi:
             response = await self.client.post(url, data=form_data, headers=headers, cookies=cookies)
             
             # 从Location头中提取code
-            import re
             location = response.headers.get('Location', '')
             code_match = re.search(r'code=(.*?)&', location)
             if not code_match:
@@ -390,7 +388,6 @@ class DeltaApi:
                 # logger.debug(f"获取角色信息结果: {result}")
                 
                 # 解析响应数据
-                import re
                 pattern = r"\{([^}]*)\}"
                 matches = re.search(pattern, result)
                 if not matches:
@@ -826,7 +823,7 @@ class DeltaApi:
             logger.exception(f"获取用户信息失败: {e}")
             return {'status': False, 'message': '获取用户信息失败，详情请查看日志', 'data': {}}
 
-    async def get_person_center_info(self, access_token: str, openid: str):
+    async def get_person_center_info(self, access_token: str, openid: str, resource_type: str = 'sol'):
         access_type = self.platform
         try:
             # 参数验证
@@ -845,7 +842,7 @@ class DeltaApi:
                 'method': 'dfm/center.person.resource',
                 'source': 2,
                 'param': json.dumps({
-                    "resourceType": "sol",
+                    "resourceType": resource_type,
                     "seasonid": [1, 2, 3, 4, 5],
                     "isAllSeason": True
                     })
@@ -856,7 +853,7 @@ class DeltaApi:
 
             data = response.json()
             if data['ret'] == 0:
-                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']['solDetail']}
+                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
             else:
                 logger.error(f"获取用户中心信息失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}
@@ -1073,3 +1070,47 @@ class DeltaApi:
         except Exception as e:
             logger.exception(f"获取微信访问令牌失败: {e}")
             return {'status': False, 'message': '获取微信访问令牌失败，详情请查看日志', 'data': {}}
+
+    async def get_role_basic_info(self, access_token: str, openid: str):
+        """
+        获取角色基本信息
+        """
+        access_type = self.platform
+        if not access_token or not openid:
+            return {'status': False, 'message': '缺少参数', 'data': {}}
+        
+        try:
+            params = {
+                'needGopenid': 1,
+                'sAMSAcctype': access_type,
+                'sAMSAccessToken': access_token,
+                'sAMSAppOpenId': openid,
+                'sAMSSourceAppId': '101491592',
+                'game': 'dfm',
+                'sCloudApiName': 'ams.gameattr.role',
+                'area': 36,
+                'platid': 1,
+                'partition': 36
+            }
+            
+            headers = {
+                'referer': 'https://df.qq.com/',
+            }
+            
+            url = 'https://comm.aci.game.qq.com/main'
+            response = await self.client.get(url, params=params, headers=headers)
+            result = response.text
+            # logger.debug(f"获取角色信息结果: {result}")
+            
+            # 解析响应数据
+            pattern = r"propcapital=(\d+)"
+            matches = re.search(pattern, result)
+            if not matches:
+                return {'status': False, 'message': '获取角色信息失败', 'data': {}}
+            
+            data = {"propcapital": matches.group(1)}
+            return {'status': True, 'message': '获取角色信息成功', 'data': data}
+        except Exception as e:
+            logger.exception(f"获取角色信息失败: {e}")
+            return {'status': False, 'message': '获取角色信息失败，详情请查看日志', 'data': {}}
+            

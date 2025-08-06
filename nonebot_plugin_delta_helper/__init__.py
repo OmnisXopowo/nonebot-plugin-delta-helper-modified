@@ -410,14 +410,70 @@ async def _(event: MessageEvent, session: async_scoped_session):
         await bind_delta_player_info.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
     deltaapi = DeltaApi(user_data.platform)
     res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
+    basic_info = await deltaapi.get_role_basic_info(access_token=user_data.access_token, openid=user_data.openid)
+    sol_info = await deltaapi.get_person_center_info(access_token=user_data.access_token, openid=user_data.openid, resource_type='sol')
+    tdm_info = await deltaapi.get_person_center_info(access_token=user_data.access_token, openid=user_data.openid, resource_type='mp')
+    if basic_info['status']:
+        propcapital = Util.trans_num_easy_for_read(basic_info['data']['propcapital'])
+    else:
+        propcapital = 0
     try:
-        if res['status']:
+        if res['status'] and sol_info['status'] and tdm_info['status']:
             user_name = res['data']['player']['charac_name']
             money = Util.trans_num_easy_for_read(res['data']['money'])
+            rankpoint = res['data']['game']['rankpoint']
+            soltotalfght = res['data']['game']['soltotalfght']
+            solttotalescape = res['data']['game']['solttotalescape']
+            soltotalkill = res['data']['game']['soltotalkill']
+            solescaperatio = res['data']['game']['solescaperatio']
+            profitLossRatio = Util.trans_num_easy_for_read(int(sol_info['data']['solDetail']['profitLossRatio'])//100)
+            highKillDeathRatio = f"{int(sol_info['data']['solDetail']['highKillDeathRatio'])/100:.2f}"
+            medKillDeathRatio = f"{int(sol_info['data']['solDetail']['medKillDeathRatio'])/100:.2f}"
+            lowKillDeathRatio = f"{int(sol_info['data']['solDetail']['lowKillDeathRatio'])/100:.2f}"
+            totalGainedPrice = Util.trans_num_easy_for_read(sol_info['data']['solDetail']['totalGainedPrice'])
+            totalGameTime = Util.seconds_to_duration(sol_info['data']['solDetail']['totalGameTime'])
+
+
+            tdmrankpoint = res['data']['game']['tdmrankpoint']
+            avgkillperminute = f"{int(res['data']['game']['avgkillperminute'])/100:.2f}"
+            tdmtotalfight = res['data']['game']['tdmtotalfight']
+            totalwin = res['data']['game']['totalwin']
+            tdmtotalkill = res['data']['game']['tdmtotalkill']
+            tdmduration = Util.seconds_to_duration(int(res['data']['game']['tdmduration'])*60)
+            tdmsuccessratio = res['data']['game']['tdmsuccessratio']
+            avgScorePerMinute = f"{int(tdm_info['data']['mpDetail']['avgScorePerMinute'])/100:.2f}"
+            totalVehicleDestroyed = tdm_info['data']['mpDetail']['totalVehicleDestroyed']
+            totalVehicleKill = tdm_info['data']['mpDetail']['totalVehicleKill']
             
             try:
                 renderer = await get_renderer()
-                img_data = await renderer.render_player_info(user_name, money)
+                player_data = {
+                    'user_name': user_name,
+                    'money': money,
+                    'propcapital': propcapital,
+                    'rankpoint': rankpoint,
+                    'soltotalfght': soltotalfght,
+                    'solttotalescape': solttotalescape,
+                    'soltotalkill': soltotalkill,
+                    'solescaperatio': solescaperatio,
+                    'profitLossRatio': profitLossRatio,
+                    'highKillDeathRatio': highKillDeathRatio,
+                    'medKillDeathRatio': medKillDeathRatio,
+                    'lowKillDeathRatio': lowKillDeathRatio,
+                    'totalGainedPrice': totalGainedPrice,
+                    'totalGameTime': totalGameTime,
+                    'tdmrankpoint': tdmrankpoint,
+                    'avgkillperminute': avgkillperminute,
+                    'tdmtotalfight': tdmtotalfight,
+                    'totalwin': totalwin,
+                    'tdmtotalkill': tdmtotalkill,
+                    'tdmduration': tdmduration,
+                    'tdmsuccessratio': tdmsuccessratio,
+                    'avgScorePerMinute': avgScorePerMinute,
+                    'totalVehicleDestroyed': totalVehicleDestroyed,
+                    'totalVehicleKill': totalVehicleKill
+                }
+                img_data = await renderer.render_player_info(player_data)
                 await Image(image=img_data).finish(reply=True)
             except FinishedException:
                 raise
@@ -425,7 +481,21 @@ async def _(event: MessageEvent, session: async_scoped_session):
                 logger.error(f"渲染玩家信息卡片失败: {e}")
                 # 降级到文本模式
             
-            await bind_delta_player_info.finish(f"角色名：{user_name}，现金：{money}", reply_message=True)
+            message = Text(f"【{user_name}的个人信息】\n")
+            message += Text("--- 账户信息 ---\n")
+            message += Text(f"现金：{money}\n")
+            message += Text(f"仓库流动资产：{propcapital}\n\n")
+            message += Text("--- 烽火数据 ---\n")
+            message += Text(f"总场数：{soltotalfght} | 总撤离数：{solttotalescape} | 撤离率：{solescaperatio}\n")
+            message += Text(f"总击杀：{soltotalkill} | 排位分：{rankpoint} | 总游戏时长：{totalGameTime}\n")
+            message += Text(f"赚损比{profitLossRatio} | 总带出：{totalGainedPrice}\n")
+            message += Text(f"kd(常规 | 机密 | 绝密)：{highKillDeathRatio} | {medKillDeathRatio} | {lowKillDeathRatio}\n\n")
+            message += Text("--- 战场数据 ---\n")
+            message += Text(f"总场数：{tdmtotalfight} | 总胜场：{totalwin} | 胜率：{tdmsuccessratio}\n")
+            message += Text(f"总击杀：{tdmtotalkill} | 排位分：{tdmrankpoint} | 总游戏时长：{tdmduration}\n")
+            message += Text(f"分均击杀：{avgkillperminute} | 分均得分：{avgScorePerMinute}\n")
+            message += Text(f"总摧毁载具：{totalVehicleDestroyed} | 总载具击杀：{totalVehicleKill}\n")
+            await message.finish(reply=True)
         else:
             await bind_delta_player_info.finish(f"查询角色信息失败：{res['message']}", reply_message=True)
     except FinishedException:
@@ -777,7 +847,7 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
     if not res['status']:
         await bind_delta_ai_comment.finish("获取角色信息失败，可能需要重新登录", reply_message=True)
 
-    person_center_info = res['data']
+    person_center_info = res['data']['solDetail']
     profitLossRatio = int(person_center_info.get('profitLossRatio', '0'))//100
     highKillDeathRatio = f"{(int(person_center_info.get('highKillDeathRatio', '0'))/100):.2f}"
     lowKillDeathRatio = f"{(int(person_center_info.get('lowKillDeathRatio', '0'))/100):.2f}"
@@ -785,8 +855,8 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
     totalFight = person_center_info.get('totalFight', '0')
     totalEscape = person_center_info.get('totalEscape', '0')
     totalGainedPrice = person_center_info.get('totalGainedPrice', '0')
-    totalConsumePrice = Util.seconds_to_duration(person_center_info.get('totalConsumePrice', '0'))
     totalKill = person_center_info.get('totalKill', '0')
+    totalGameTime = Util.seconds_to_duration(person_center_info.get('totalGameTime', '0'))
 
     for i in range (1,3):
         statDate, statDate_str = Util.get_Sunday_date(i)
@@ -853,7 +923,7 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
             },
             {
                 "role": "user",
-                "content": f"这个玩家的生涯数据：赚损比（每死一次可以赚多少哈夫币）是{profitLossRatio}，绝密行动kda是{highKillDeathRatio}，机密行动kda是{medKillDeathRatio}，常规行动kda是{lowKillDeathRatio}，总场数是{totalFight}，总撤离数是{totalEscape}，总获取哈夫币是{totalGainedPrice}，总游戏时长是{totalConsumePrice}，总击杀是{totalKill}；这名玩家上周的数据：总场数是{total_sol_num}，总撤离数是{total_exacuation_num}，百万以上撤离次数是{GainedPrice_overmillion_num}，总击杀是{total_Kill_Player}，总死亡是{total_Death_Count}，总游戏时长是{total_Online_Time_str}，总带出是{Gained_Price}，资产是从{price_list[0]}到{price_list[-1]}，资产变化是{rise_Price}。"
+                "content": f"这个玩家的生涯数据：赚损比（每死一次可以赚多少哈夫币）是{profitLossRatio}，绝密行动kda是{highKillDeathRatio}，机密行动kda是{medKillDeathRatio}，常规行动kda是{lowKillDeathRatio}，总场数是{totalFight}，总撤离数是{totalEscape}，总获取哈夫币是{totalGainedPrice}，总游戏时长是{totalGameTime}，总击杀是{totalKill}；这名玩家上周的数据：总场数是{total_sol_num}，总撤离数是{total_exacuation_num}，百万以上撤离次数是{GainedPrice_overmillion_num}，总击杀是{total_Kill_Player}，总死亡是{total_Death_Count}，总游戏时长是{total_Online_Time_str}，总带出是{Gained_Price}，资产是从{price_list[0]}到{price_list[-1]}，资产变化是{rise_Price}。"
             }
             ]
         )

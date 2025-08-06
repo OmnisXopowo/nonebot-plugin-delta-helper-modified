@@ -174,12 +174,9 @@ class CardRenderer:
             'money': money
         })
     
-    async def render_player_info(self, user_name: str, money: str) -> bytes:
+    async def render_player_info(self, player_data: dict) -> bytes:
         """渲染玩家信息卡片"""
-        return await self.render_card('player_info.html', {
-            'user_name': user_name,
-            'money': money
-        })
+        return await self.render_card('player_info.html', player_data)
     
     async def render_safehouse(self, devices: list) -> bytes:
         """渲染特勤处状态卡片"""
