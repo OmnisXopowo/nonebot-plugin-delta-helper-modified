@@ -27,7 +27,7 @@ from .util import Util
 from .render import get_renderer, close_renderer
 from . import migrations
 
-from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention, AggregatedMessageFactory
+from nonebot_plugin_saa import Image, Text, TargetQQGroup, Mention, AggregatedMessageFactory, enable_auto_select_bot
 from nonebot_plugin_orm import async_scoped_session, get_session
 from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_limiter import UserScope, Cooldown, GlobalScope, Increaser
@@ -1134,6 +1134,8 @@ async def start_watch_record():
             continue
 
     await session.close()
+
+enable_auto_select_bot()
 
 # 启动时初始化
 @driver.on_startup
