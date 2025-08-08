@@ -438,7 +438,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
             avgkillperminute = f"{int(res['data']['game']['avgkillperminute'])/100:.2f}"
             tdmtotalfight = res['data']['game']['tdmtotalfight']
             totalwin = res['data']['game']['totalwin']
-            tdmtotalkill = res['data']['game']['tdmtotalkill']
+            tdmtotalkill = int(int(res['data']['game']['tdmduration'])*int(res['data']['game']['avgkillperminute'])/100)
             tdmduration = Util.seconds_to_duration(int(res['data']['game']['tdmduration'])*60)
             tdmsuccessratio = res['data']['game']['tdmsuccessratio']
             avgScorePerMinute = f"{int(tdm_info['data']['mpDetail']['avgScorePerMinute'])/100:.2f}"
