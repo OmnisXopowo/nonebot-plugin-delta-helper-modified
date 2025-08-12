@@ -1234,6 +1234,19 @@ async def get_record(event: MessageEvent, session: async_scoped_session, args: M
 
             # 解析救援数
             RescueTeammateCount = record.get('RescueTeammateCount', 0)
+            RoomId = record.get('RoomId', '')
+            res = await deltaapi.get_tdm_detail(user_data.access_token, user_data.openid, RoomId)
+            if res['status'] and res['data']:
+                mpDetailList = res['data'].get('mpDetailList', [])
+                for mpDetail in mpDetailList:
+                    if mpDetail.get('isCurrentUser', False):
+                        rescueTeammateCount = mpDetail.get('rescueTeammateCount', 0)
+                        if rescueTeammateCount > 0:
+                            RescueTeammateCount = rescueTeammateCount
+                            break
+            else:
+                logger.error(f"获取战绩详情失败: {res['message']}")
+                
 
             # 解析总得分
             TotalScore = record.get('TotalScore', 0)
@@ -1307,13 +1320,13 @@ async def watch_record(user_name: str, qq_id: int):
             # 获取最新战绩
             if gun_records:
                 latest_record = gun_records[0]  # 第一条是最新的
-                
+
                 # 检查时间限制
                 if not is_record_within_time_limit(latest_record):
                     logger.debug(f"最新战绩时间超过{BROADCAST_EXPIRED_MINUTES}分钟，跳过播报")
                     await session.close()
                     return
-                
+               
                 # 生成战绩ID
                 record_id = generate_record_id(latest_record)
                 
@@ -1322,7 +1335,19 @@ async def watch_record(user_name: str, qq_id: int):
                 
                 # 如果是新战绩（ID不同）
                 if not latest_record_data or latest_record_data.latest_record_id != record_id:
-                    
+                    RoomId = latest_record.get('RoomId', '')
+                    res = await deltaapi.get_tdm_detail(user_data.access_token, user_data.openid, RoomId)
+                    if res['status'] and res['data']:
+                        mpDetailList = res['data'].get('mpDetailList', [])
+                        for mpDetail in mpDetailList:
+                            if mpDetail.get('isCurrentUser', False):
+                                rescueTeammateCount = mpDetail.get('rescueTeammateCount', 0)
+                                if rescueTeammateCount > 0:
+                                    latest_record['RescueTeammateCount'] = rescueTeammateCount
+                                    break
+                    else:
+                        logger.error(f"获取战绩详情失败: {res['message']}")
+
                     # 格式化播报消息
                     result = await format_record_message(latest_record, user_name)
                     
