@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block extra_styles %}
+/* 战场模式单战绩卡片：紧凑信息行风格 */
+.card { max-width: 440px; }
+.muted { color: #6b7280; }
+/* 紧凑并排名值对布局 */
+.inline-group { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.inline-group:last-child { border-bottom: none; }
+.kv-inline { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: 1; }
+.kv-label { color: #6b7280; font-size: 14px; }
+.kv-value { color: #1a1a1a; font-weight: 600; }
+/* 结果着色：胜利绿，失败红，中途退出灰 */
+.kv-value.success { color: #10b981; }
+.kv-value.danger { color: #ef4444; }
+.kv-value.neutral { color: #9ca3af; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div class="card-icon">
+      {% if result == '胜利' %}🏅{% elif result == '失败' %}🛑{% else %}📋{% endif %}
+    </div>
+    <div>
+      <h2 class="card-title">{{ title }} {{ time }}</h2>
+      {% if user_name %}<p class="card-subtitle">{{ user_name }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="card-content">
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">🗺️ 地图</span><span class="kv-value">{{ map_name }}</span></div>
+      <div class="kv-inline"><span class="kv-label">👤 干员</span><span class="kv-value">{{ armed_force }}</span></div>
+    </div>
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">📊 结果</span><span class="kv-value {% if result == '胜利' %}success{% elif result == '失败' %}danger{% elif result == '中途退出' %}neutral{% endif %}">{{ result }}</span></div>
+      <div class="kv-inline"><span class="kv-label">⏱️ 对局时长</span><span class="kv-value">{{ gametime }}</span></div>
+    </div>
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">⚔️ K/D/A</span><span class="kv-value">{{ kill_count }}/{{ death_count }}/{{ assist_count }}</span></div>
+      <div class="kv-inline"><span class="kv-label">🤝 救援</span><span class="kv-value">{{ rescue_count }}</span></div>
+    </div>
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">🥇 总得分</span><span class="kv-value">{{ total_score }}</span></div>
+      <div class="kv-inline"><span class="kv-label">⏱️ 分均得分</span><span class="kv-value">{{ avg_score_per_minute }}</span></div>
+    </div>
+  </div>
+
+  <div class="footer">DELTA HELPER</div>
+</div>
+{% endblock %}
+
+

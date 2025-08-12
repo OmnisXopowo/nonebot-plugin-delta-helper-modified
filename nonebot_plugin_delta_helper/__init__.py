@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+from typing import Union
 import urllib.parse
 import httpx
 from openai import AsyncOpenAI
@@ -22,7 +23,7 @@ require("nonebot_plugin_limiter")
 from .config import Config
 from .deltaapi import DeltaApi
 from .db import UserDataDatabase
-from .model import UserData, SafehouseRecord
+from .model import UserData, SafehouseRecord, LatestRecord
 from .util import Util
 from .render import get_renderer, close_renderer
 from . import migrations
@@ -70,6 +71,7 @@ bind_delta_safehouse_remind_close = on_command("三角洲特勤处提醒关闭")
 bind_delta_daily_report = on_command("三角洲日报")
 bind_delta_weekly_report = on_command("三角洲周报")
 bind_delta_ai_comment = on_command("三角洲AI锐评", aliases={"三角洲ai锐评"})
+bind_delta_get_record = on_command("三角洲战绩")
 
 @bind_delta_help.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -84,7 +86,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
         # 降级到文本模式
     
     await bind_delta_help.finish("""三角洲助手插件使用帮助：
-1. 三角洲登录：登录三角洲账号，需要用摄像头扫码，登录后会自动播报百万撤离或百万战损战绩
+1. 三角洲登录：通过扫码登录三角洲账号，如果是在群聊，登录后会自动播报百万撤离或百万战损战绩以及战场百杀或分均1000+战绩，平台可选填qq/微信，不填参数默认qq登录
 2. 三角洲信息：查看三角洲基本信息
 3. 三角洲密码：查看三角洲今日密码门密码
 4. 三角洲特勤处：查看三角洲特勤处制造状态
@@ -92,7 +94,8 @@ async def _(event: MessageEvent, session: async_scoped_session):
 6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能
 7. 三角洲日报：查看三角洲日报
 8. 三角洲周报：查看三角洲周报
-9. 三角洲AI锐评：ai锐评玩家数据""")
+9. 三角洲AI锐评：ai锐评玩家数据
+10.三角洲战绩 [模式] [页码]：查看三角洲战绩，模式可选：烽火/战场，默认烽火，页码可选任意正整数，不指定页码则显示第一页""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
@@ -138,8 +141,8 @@ async def format_record_message(record_data: dict, user_name: str) -> bytes|str|
             result_str = "撤离失败"
         
         # 格式化收益
+        price_int = int(final_price)
         try:
-            price_int = int(final_price)
             price_str = Util.trans_num_easy_for_read(price_int)
         except:
             price_str = final_price
@@ -214,6 +217,87 @@ async def format_record_message(record_data: dict, user_name: str) -> bytes|str|
 
     except Exception as e:
         logger.exception(f"格式化战绩消息失败: {e}")
+        return None
+
+async def format_tdm_record_message(record_data: dict, user_name: str) -> bytes|str|None:
+    """格式化战场战绩播报消息"""
+    try:
+        # 解析时间
+        event_time = record_data.get('dtEventTime', '')
+        # 解析地图
+        map_id = record_data.get('MapID', '')
+        map_name = Util.get_map_name(map_id)
+        # 解析结果
+        match_result = Util.get_tdm_match_result(record_data.get('MatchResult', 0))
+        # 解析KDA
+        kill_num: int = record_data.get('KillNum', 0)
+        death_num: int = record_data.get('Death', 0)
+        assist_num: int = record_data.get('Assist', 0)
+        # 分数与时长
+        total_score: int = record_data.get('TotalScore', 0)
+        game_time: int = record_data.get('GameTime', 0)  # 秒
+        game_time_str = Util.seconds_to_duration(game_time)
+        # 分均得分（避免除零）
+        avg_score_per_minute: int = int(total_score * 60 / game_time) if game_time and game_time > 0 else 0
+
+        # 触发条件
+        trigger_kill = kill_num >= 100
+        trigger_avg = avg_score_per_minute >= 1000
+        if not (trigger_kill or trigger_avg):
+            return None
+
+        # 文本播报（回退或同时使用）
+        if trigger_kill:
+            message = f"🎯 {user_name} 捞薯大师！\n"
+        else:
+            message = f"🎯 {user_name} 刷分大王！\n"
+        message += f"⏰ 时间: {event_time}\n"
+        message += f"👤 干员: {Util.get_armed_force_name(record_data.get('ArmedForceId', 0))}\n"
+        message += f"🗺️ 地图: {map_name}\n"
+        message += f"📊 结果: {match_result}\n"
+        message += f"⏱️ 时长: {game_time_str}\n"
+        message += f"💀 KDA: {kill_num}/{death_num}/{assist_num}\n"
+        message += f"💰 总得分: {total_score}\n"
+        message += f"🎖️ 分均得分: {avg_score_per_minute}"
+
+        # 构建卡片数据
+        if trigger_kill:
+            main_label = '捞薯大师'
+            main_value = str(kill_num)
+            badge_text = '100+杀'
+        else:
+            main_label = '刷分大王'
+            main_value = str(avg_score_per_minute)
+            badge_text = '1000+分均得分'
+
+        card_data = {
+            'user_name': user_name,
+            'title': '战场高光！',
+            'time': event_time,
+            'map_name': map_name,
+            'result': match_result,
+            'gametime': game_time_str,
+            'armed_force': Util.get_armed_force_name(record_data.get('ArmedForceId', 0)),
+            'kill_count': kill_num,
+            'death_count': death_num,
+            'assist_count': assist_num,
+            'total_score': total_score,
+            'avg_score_per_minute': avg_score_per_minute,
+            'is_good': True,
+            'main_label': main_label,
+            'main_value': main_value,
+            'badge_text': badge_text,
+        }
+
+        try:
+            renderer = await get_renderer()
+            img_data = await renderer.render_tdm_battle_record(card_data)
+            return img_data
+        except Exception as e:
+            logger.exception(f"渲染战场战绩卡片失败: {e}")
+            return message
+    except Exception as e:
+        logger.exception(f"格式化战场战绩消息失败: {e}")
         return None
 
 def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADCAST_EXPIRED_MINUTES) -> bool:
@@ -331,7 +415,7 @@ async def _(event: MessageEvent, session: async_scoped_session, args: Message = 
                             await bind_delta_login.finish("保存用户数据失败，请稍查看日志", reply_message=True)
                         await user_data_database.commit()
                         user_name = res['data']['player']['charac_name']
-                        scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                        scheduler.add_job(watch_all_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
                         try:
                             renderer = await get_renderer()
                             img_data = await renderer.render_login_success(user_name, Util.trans_num_easy_for_read(res['data']['money']))
@@ -371,6 +455,8 @@ async def _(event: MessageEvent, session: async_scoped_session, args: Message = 
                     qq_id = event.user_id
                     if isinstance(event, GroupMessageEvent):
                         group_id = event.group_id
+                    else:
+                        group_id = 0
                     res = await deltaapi.bind(access_token=access_token, openid=openid)
                     if not res['status']:
                         await bind_delta_login.finish(f"绑定失败：{res['message']}", reply_message=True)
@@ -382,7 +468,7 @@ async def _(event: MessageEvent, session: async_scoped_session, args: Message = 
                             await bind_delta_login.finish("保存用户数据失败，请稍查看日志", reply_message=True)
                         await user_data_database.commit()
                         user_name = res['data']['player']['charac_name']
-                        scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                        scheduler.add_job(watch_all_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
                         try:
                             renderer = await get_renderer()
                             img_data = await renderer.render_login_success(user_name, Util.trans_num_easy_for_read(res['data']['money']))
@@ -727,7 +813,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
             res = await deltaapi.get_weekly_friend_report(access_token=access_token, openid=openid, statDate=statDate)
 
             friend_list = []
-            if res['status']:
+            if res['status'] and res['data']:
                 friends_sol_record = res['data'].get('friends_sol_record', [])
                 if friends_sol_record:
                     for friend in friends_sol_record:
@@ -927,13 +1013,251 @@ async def _(event: MessageEvent, session: async_scoped_session, increaser: Incre
             }
             ]
         )
-        increaser.execute()
+        
         if response.choices[0].message.content:
+            increaser.execute()
             msg = Mention(user_id=str(event.user_id)) + Text(' ') + Text(response.choices[0].message.content.strip())
             await msg.finish()
         else:
             logger.debug(f"AI锐评内容为空: {response.choices[0].message}")
             await bind_delta_ai_comment.finish("AI锐评内容为空，请查看日志", reply_message=True)
+
+@bind_delta_get_record.handle()
+async def get_record(event: MessageEvent, session: async_scoped_session, args: Message = CommandArg()):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_get_record.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+    
+    arg_list = args.extract_plain_text().strip().split()
+    if len(arg_list) == 0:
+        type_id = 4
+        page = 1
+    elif len(arg_list) == 1:
+        try:
+            page = int(arg_list[0])
+            type_id = 4
+        except ValueError:
+            page = 1
+            if arg_list[0] in ["烽火", "烽火行动"]:
+                type_id = 4
+            elif arg_list[0] in ["战场", "大战场", "全面战场"]:
+                type_id = 5
+            else:
+                await bind_delta_get_record.finish("请输入正确的模式名", reply_message=True)
+    elif len(arg_list) == 2:
+        try:
+            page = int(arg_list[0])
+            mode_name = arg_list[1]
+        except ValueError:
+            try:
+                page = int(arg_list[1])
+                mode_name = arg_list[0]
+            except ValueError:
+                await bind_delta_get_record.finish("参数错误", reply_message=True)
+        if mode_name in ["烽火", "烽火行动"]:
+            type_id = 4
+        elif mode_name in ["战场", "大战场", "全面战场"]:
+            type_id = 5
+        else:
+            await bind_delta_get_record.finish("请输入正确的模式名", reply_message=True)
+    else:
+        await bind_delta_get_record.finish("参数过多", reply_message=True)
+
+    deltaapi = DeltaApi(user_data.platform)
+    res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
+    if not res['status']:
+        await bind_delta_get_record.finish("获取玩家信息失败，可能需要重新登录", reply_message=True)
+    user_name = res['data']['player']['charac_name']
+
+    res = await deltaapi.get_record(user_data.access_token, user_data.openid, type_id, page)
+    if not res['status']:
+        await bind_delta_get_record.finish("获取战绩失败，可能需要重新登录", reply_message=True)
+
+    if type_id == 4:
+        if not res['data']['gun']:
+            await bind_delta_get_record.finish("本页没有战绩", reply_message=True)
+
+        index = 1
+        msgs: list[Union[Text, Image]] = [Text(f"{user_name}烽火战绩 第{page}页")]
+        
+        # 受限并发渲染，保持顺序
+        renderer = await get_renderer()
+        concurrency_limit = 8  # 可按需调整
+        semaphore = asyncio.Semaphore(concurrency_limit)
+
+        tasks: list[asyncio.Task] = []
+
+        for record in res['data']['gun']:
+            # 捕获当前循环变量至局部，避免闭包引用问题
+            cur_index = index
+            index += 1
+
+            # 解析时间
+            event_time = record.get('dtEventTime', '')
+            # 解析地图
+            map_id = record.get('MapId', '')
+            map_name = Util.get_map_name(map_id)
+            # 解析结果
+            escape_fail_reason = record.get('EscapeFailReason', 0)
+            result_str = "撤离成功" if escape_fail_reason == 1 else "撤离失败"
+            # 解析时长
+            duration_seconds = record.get('DurationS', 0)
+            minutes = duration_seconds // 60
+            seconds = duration_seconds % 60
+            duration_str = f"{minutes}分{seconds}秒"
+            # 解析击杀数
+            kill_count = record.get('KillCount', 0)
+            # 解析收益
+            final_price = record.get('FinalPrice', '0')
+            if final_price is None:
+                final_price = "未知"
+            # 解析纯利润
+            flow_cal_gained_price = record.get('flowCalGainedPrice', 0)
+            flow_cal_gained_price_str = f"{'' if flow_cal_gained_price >= 0 else '-'}{Util.trans_num_easy_for_read(abs(flow_cal_gained_price))}"
+            # 格式化收益
+            try:
+                price_int = int(final_price)
+                price_str = Util.trans_num_easy_for_read(price_int)
+            except:
+                price_str = final_price
+
+            # 解析干员
+            ArmedForceId = record.get('ArmedForceId', '')
+            ArmedForce = Util.get_armed_force_name(ArmedForceId)
+
+            fallback_message = (
+                f"#{cur_index} {event_time}\n"
+                f"🗺️ 地图: {map_name} | 干员: {ArmedForce}\n"
+                f"📊 结果: {result_str} | 存活时长: {duration_str}\n"
+                f"💀 击杀干员: {kill_count}\n"
+                f"💰 带出: {price_str}\n"
+                f"💸 利润: {flow_cal_gained_price_str}"
+            )
+
+            card_data = {
+                'user_name': user_name,
+                'time': event_time,
+                'map_name': map_name,
+                'armed_force': ArmedForce,
+                'result': result_str,
+                'duration': duration_str,
+                'kill_count': kill_count,
+                'price': price_str,
+                'profit': flow_cal_gained_price_str,
+                'title': f"#{cur_index}"
+            }
+
+            async def render_task(data=card_data, text=fallback_message):
+                await semaphore.acquire()
+                try:
+                    img = await renderer.render_single_battle_card(data)
+                    return Image(image=img)
+                except Exception as e:
+                    logger.exception(f"渲染单战绩卡片失败: {e}")
+                    return Text(text)
+                finally:
+                    semaphore.release()
+
+            tasks.append(asyncio.create_task(render_task()))
+
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        msgs.extend(results)
+        await AggregatedMessageFactory(msgs).finish()
+
+    elif type_id == 5:
+        if not res['data']['operator']:
+            await bind_delta_get_record.finish("本页没有战绩", reply_message=True)
+
+        index = 1
+        msgs = [Text(f"{user_name}战场战绩 第{page}页")]
+
+        # 受限并发渲染，保持顺序
+        renderer = await get_renderer()
+        concurrency_limit = 8
+        semaphore = asyncio.Semaphore(concurrency_limit)
+        tasks = []
+
+        for record in res['data']['operator']:
+            cur_index = index
+            index += 1
+            # 解析时间
+            event_time = record.get('dtEventTime', '')
+            # 解析地图
+            map_id = record.get('MapID', '')
+            map_name = Util.get_map_name(map_id)
+            # 解析结果
+            MatchResult = record.get('MatchResult', 0)
+            if MatchResult == 1:
+                result_str = "胜利"
+            elif MatchResult == 2:
+                result_str = "失败"
+            elif MatchResult == 3:
+                result_str = "中途退出"
+            else:
+                result_str = f"未知{MatchResult}"
+            # 解析时长
+            gametime = record.get('gametime', 0)
+            minutes = gametime // 60
+            seconds = gametime % 60
+            duration_str = f"{minutes}分{seconds}秒"
+            # 解析KDA
+            KillNum = record.get('KillNum', 0)
+            Death = record.get('Death', 0)
+            Assist = record.get('Assist', 0)
+
+            # 解析救援数
+            RescueTeammateCount = record.get('RescueTeammateCount', 0)
+
+            # 解析总得分
+            TotalScore = record.get('TotalScore', 0)
+            avgScorePerMinute = int(TotalScore * 60 / gametime) if gametime and gametime > 0 else 0
+
+            # 解析干员
+            ArmedForceId = record.get('ArmedForceId', '')
+            ArmedForce = Util.get_armed_force_name(ArmedForceId)
+
+            fallback_message = (
+                f"#{cur_index} {event_time}\n"
+                f"🗺️ 地图: {map_name} | 干员: {ArmedForce}\n"
+                f"📊 结果: {result_str} | 时长: {duration_str}\n"
+                f"💀 K/D/A: {KillNum}/{Death}/{Assist} | 救援: {RescueTeammateCount}\n"
+                f"🥇 总得分: {TotalScore} | 分均得分: {avgScorePerMinute}"
+            )
+
+            card_data = {
+                'title': f"#{cur_index}",
+                'time': event_time,
+                'user_name': user_name,
+                'map_name': map_name,
+                'armed_force': ArmedForce,
+                'result': result_str,
+                'gametime': duration_str,
+                'kill_count': KillNum,
+                'death_count': Death,
+                'assist_count': Assist,
+                'rescue_count': RescueTeammateCount,
+                'total_score': TotalScore,
+                'avg_score_per_minute': avgScorePerMinute,
+            }
+
+            async def render_task(data=card_data, text=fallback_message):
+                await semaphore.acquire()
+                try:
+                    img = await renderer.render_single_tdm_card(data)
+                    return Image(image=img)
+                except Exception as e:
+                    logger.exception(f"渲染战场单战绩卡片失败: {e}")
+                    return Text(text)
+                finally:
+                    semaphore.release()
+
+            tasks.append(asyncio.create_task(render_task()))
+
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        msgs.extend(results)
+        await AggregatedMessageFactory(msgs).finish()
+    
 
 
 async def watch_record(user_name: str, qq_id: int):
@@ -947,7 +1271,7 @@ async def watch_record(user_name: str, qq_id: int):
         if res['status']:
             # logger.debug(f"玩家{user_name}的战绩：{res['data']}")
             
-            # 只处理gun模式战绩
+            # 处理gun模式战绩
             gun_records = res['data'].get('gun', [])
             if not gun_records:
                 # logger.debug(f"玩家{user_name}没有gun模式战绩")
@@ -972,6 +1296,7 @@ async def watch_record(user_name: str, qq_id: int):
                 
                 # 如果是新战绩（ID不同）
                 if not latest_record_data or latest_record_data.latest_record_id != record_id:
+                    
                     # 格式化播报消息
                     result = await format_record_message(latest_record, user_name)
                     
@@ -993,11 +1318,19 @@ async def watch_record(user_name: str, qq_id: int):
                                 logger.info(f"播报战绩成功: {user_name} - {record_id}")
                         
                             # 更新最新战绩记录
-                            if await user_data_database.update_latest_record(qq_id, record_id):
+                            if not latest_record_data:
+                                latest_record_data = LatestRecord(
+                                    qq_id=qq_id,
+                                    latest_record_id=record_id,
+                                    latest_tdm_record_id=""
+                                )
+                            else:
+                                latest_record_data.latest_record_id = record_id
+                            if await user_data_database.update_latest_record(latest_record_data):
                                 await user_data_database.commit()
                                 logger.info(f"更新最新战绩记录成功: {user_name} - {record_id}")
                             else:
-                                logger.error(f"更新最新战绩记录失败: {record_id}")
+                                logger.error(f"更新最新战绩记录失败: {user_name} - {record_id}")
                         
                     except Exception as e:
                         logger.error(f"发送播报消息失败: {e}")
@@ -1008,6 +1341,91 @@ async def watch_record(user_name: str, qq_id: int):
         await session.close()
     except Exception as e:
         logger.error(f"关闭数据库会话失败: {e}")
+
+async def watch_record_tdm(user_name: str, qq_id: int):
+    session = get_session()
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(qq_id)
+    if user_data:
+        deltaapi = DeltaApi(user_data.platform)
+        # logger.debug(f"开始获取玩家{user_name}的战绩")
+        res = await deltaapi.get_record(user_data.access_token, user_data.openid, type_id=5)
+        if res['status']:
+            # logger.debug(f"玩家{user_name}的战绩：{res['data']}")
+            
+            # 处理operator模式战绩
+            operator_records = res['data'].get('operator', [])
+            if not operator_records:
+                # logger.debug(f"玩家{user_name}没有operator模式战绩")
+                await session.close()
+                return
+            
+            # 获取最新战绩
+            if operator_records:
+                latest_record = operator_records[0]  # 第一条是最新的
+                
+                # 检查时间限制
+                if not is_record_within_time_limit(latest_record):
+                    logger.debug(f"最新战绩时间超过{BROADCAST_EXPIRED_MINUTES}分钟，跳过播报")
+                    await session.close()
+                    return
+                
+                # 生成战绩ID
+                record_id = generate_record_id(latest_record)
+                
+                # 获取之前的最新战绩ID
+                latest_record_data = await user_data_database.get_latest_record(qq_id)
+                
+                # 如果是新战绩（ID不同）
+                if not latest_record_data or latest_record_data.latest_tdm_record_id != record_id:
+                    # 格式化播报消息
+                    result = await format_tdm_record_message(latest_record, user_name)
+                    
+                    # 发送播报消息
+                    try:
+                        if result:
+                            if user_data.group_id != 0:
+                                if isinstance(result, bytes):
+                                    # 有卡片数据
+                                    img_data = result
+                                    try:
+                                        await Image(image=img_data).send_to(target=TargetQQGroup(group_id=user_data.group_id))
+                                    except Exception as e:
+                                        logger.error(f"发送战绩卡片失败: {e}")
+                                else:
+                                    # 只有文本消息
+                                    message = result
+                                    await Text(message).send_to(target=TargetQQGroup(group_id=user_data.group_id))
+                                logger.info(f"播报战绩成功: {user_name} - {record_id}")
+                        
+                            # 更新最新战绩记录
+                            if not latest_record_data:
+                                latest_record_data = LatestRecord(
+                                    qq_id=qq_id,
+                                    latest_record_id="",
+                                    latest_tdm_record_id=record_id
+                                )
+                            else:
+                                latest_record_data.latest_tdm_record_id = record_id
+                            if await user_data_database.update_latest_record(latest_record_data):
+                                await user_data_database.commit()
+                                logger.info(f"更新最新战绩记录成功: {user_name} - {record_id}")
+                            else:
+                                logger.error(f"更新最新战绩记录失败: {user_name} - {record_id}")
+                        
+                    except Exception as e:
+                        logger.error(f"发送播报消息失败: {e}")
+                else:
+                    logger.debug(f"没有新战绩需要播报: {user_name}")
+            
+    try:
+        await session.close()
+    except Exception as e:
+        logger.error(f"关闭数据库会话失败: {e}")
+
+async def watch_all_record(user_name: str, qq_id: int):
+    await watch_record(user_name, qq_id)
+    await watch_record_tdm(user_name, qq_id)
 
 async def send_safehouse_message(qq_id: int, object_name: str, left_time: int):
     await asyncio.sleep(left_time)
@@ -1120,7 +1538,7 @@ async def start_watch_record():
             res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
             if res['status'] and 'charac_name' in res['data']['player']:
                 user_name = res['data']['player']['charac_name']
-                scheduler.add_job(watch_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                scheduler.add_job(watch_all_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
                 # 添加特勤处监控任务
 
                 if if_remind_safehouse:

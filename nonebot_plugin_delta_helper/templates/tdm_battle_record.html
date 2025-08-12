@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block extra_styles %}
+.highlight-card.good { background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); }
+.highlight-card.bad { background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); }
+.highlight-label.good { color: #065f46; }
+.highlight-label.bad { color: #3730a3; }
+.highlight-value.good { color: #059669; }
+.highlight-value.bad { color: #4f46e5; }
+.highlight-badge.good { background-color: #059669; color: white; }
+.highlight-badge.bad { background-color: #4f46e5; color: white; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">
+            {% if result == '胜利' %}🏅{% else %}🛑{% endif %}
+        </div>
+        <div>
+            <h2 class="card-title">
+                {{ user_name }} {{ title }}
+            </h2>
+            <p class="card-subtitle">{{ time }}</p>
+        </div>
+    </div>
+
+    <div class="card-content">
+        <!-- 主要亮点展示 -->
+        <div class="stat-card highlight-card {% if is_good %}good{% else %}bad{% endif %}" style="margin-bottom: 20px;">
+            <div class="stat-label highlight-label {% if is_good %}good{% else %}bad{% endif %}">
+                {{ main_label }}
+            </div>
+            <div class="stat-value highlight-value {% if is_good %}good{% else %}bad{% endif %}">
+                {{ main_value }}
+            </div>
+            {% if badge_text %}
+            <div class="badge highlight-badge {% if is_good %}good{% else %}bad{% endif %}" style="margin-top: 8px;">
+                {{ badge_text }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 战绩详情 -->
+        <div class="info-row">
+            <span class="info-label">🗺️ 地图</span>
+            <span class="info-value">{{ map_name }}</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">📊 结果</span>
+            <span class="info-value {% if result == '胜利' %}success{% else %}danger{% endif %}">{{ result }}</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">⏱️ 时长</span>
+            <span class="info-value">{{ gametime }}</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">👤 干员</span>
+            <span class="info-value">{{ armed_force }}</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">⚔️ K/D/A</span>
+            <span class="info-value">{{ kill_count }}/{{ death_count }}/{{ assist_count }}</span>
+        </div>
+
+        <!-- 分数详情 -->
+        <div style="margin-top: 20px;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label" style="font-size: 16px;">🎯 总得分</div>
+                    <div class="stat-value">{{ total_score }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label" style="font-size: 16px;">⏱️ 分均得分</div>
+                    <div class="stat-value">{{ avg_score_per_minute }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

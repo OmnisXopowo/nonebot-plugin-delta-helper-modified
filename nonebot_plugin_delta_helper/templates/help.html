@@ -1,5 +1,42 @@
 {% extends "base.html" %}
 
+{% block extra_styles %}
+/* 帮助卡片内联样式，优化长说明展示 */
+body { padding: 8px; }
+.card { max-width: none; width: 100%; }
+.help-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #333;
+}
+.help-row {
+  display: grid;
+  grid-template-columns: 220px 1fr; /* 固定左列宽度，右列自适应，确保第二列统一对齐 */
+  align-items: start;
+  column-gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.help-row:last-child { border-bottom: none; }
+.help-label {
+  font-weight: 600;
+  color: #1f2937;
+  text-align: left;
+  white-space: nowrap; /* 命令不换行 */
+  overflow: hidden; /* 防止溢出挤占第二列 */
+  text-overflow: ellipsis; /* 过长时省略号 */
+}
+.help-desc {
+  flex: 1 1 auto;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <div class="card-header">
@@ -12,51 +49,55 @@
     
     <div class="card-content">
         <div style="margin-bottom: 20px;">
-            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #333;">基础功能</h3>
+            <h3 class="help-section-title">基础功能</h3>
             <div class="info-group">
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲登录 [qq/微信]</span>
-                    <span style="font-size: 14px; color: #666;">扫码登录账号，不填参数默认qq登录</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲登录 [平台]</span>
+                    <span class="help-desc">扫码登录账号，平台可选填 qq/微信，不填参数默认 qq 登录。登录后会自动播报：百万撤离/百万战损战绩，以及战场百杀或分均 1000+ 战绩。</span>
                 </div>
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲信息</span>
-                    <span style="font-size: 14px; color: #666;">查看角色信息</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲信息</span>
+                    <span class="help-desc">查看角色信息</span>
                 </div>
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲密码</span>
-                    <span style="font-size: 14px; color: #666;">查看今日密码门</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲密码</span>
+                    <span class="help-desc">查看今日密码门</span>
                 </div>
             </div>
         </div>
         
         <div style="margin-bottom: 20px;">
-            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #333;">特勤处功能</h3>
+            <h3 class="help-section-title">特勤处功能</h3>
             <div class="info-group">
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲特勤处</span>
-                    <span style="font-size: 14px; color: #666;">查看制造状态</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲特勤处</span>
+                    <span class="help-desc">查看制造状态</span>
                 </div>
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲特勤处提醒开启/关闭</span>
-                    <span style="font-size: 14px; color: #666;">制造完成提醒</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲特勤处提醒开启/关闭</span>
+                    <span class="help-desc">制造完成提醒</span>
                 </div>
             </div>
         </div>
         
         <div>
-            <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #333;">数据统计</h3>
+            <h3 class="help-section-title">数据统计</h3>
             <div class="info-group">
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲日报</span>
-                    <span style="font-size: 14px; color: #666;">查看每日统计</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲日报</span>
+                    <span class="help-desc">查看每日统计</span>
                 </div>
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲周报</span>
-                    <span style="font-size: 14px; color: #666;">查看每周统计</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲周报</span>
+                    <span class="help-desc">查看每周统计</span>
                 </div>
-                <div class="info-row" style="padding: 8px 0;">
-                    <span style="font-weight: 500;">三角洲AI锐评</span>
-                    <span style="font-size: 14px; color: #666;">AI分析玩家数据</span>
+                <div class="help-row">
+                    <span class="help-label">三角洲AI锐评</span>
+                    <span class="help-desc">AI 分析玩家数据</span>
+                </div>
+                <div class="help-row">
+                    <span class="help-label">三角洲战绩 [模式] [页码]</span>
+                    <span class="help-desc">查看三角洲战绩；模式可选：烽火/战场（默认烽火）。页码为任意正整数，未指定则显示第一页。</span>
                 </div>
             </div>
         </div>

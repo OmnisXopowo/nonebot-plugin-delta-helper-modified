@@ -48,7 +48,29 @@ class Util:
             '8102': "巴克什-机密",
             '8103': "巴克什-绝密",
             '8803': "潮汐监狱-绝密",
-            '2212': "零号大坝-机密(单排模式)"
+            '2212': "零号大坝-机密(单排模式)",
+
+            '34': "烬区-占领",
+            '33': "烬区-攻防",
+            '54': "攀升-攻防",
+            '75': "临界点-攻防",
+            '103': "攀升-占领",
+            '107': "沟壕战-攻防",
+            '108': "沟壕战-占领",
+            '111': "断轨-攻防",
+            '112': "断轨-占领",
+            '113': "贯穿-攻防",
+            '114': "贯穿-占领",
+            '117': "攀升-钢铁洪流",
+            '121': "刀锋-攻防",
+            '122': "刀锋-占领",
+            '210': "临界点-占领",
+            '227': "沟壕战-钢铁洪流",
+            '302': "风暴眼-攻防",
+            '303': "风暴眼-占领",
+            '516': "沟壕战-霰弹风暴",
+            '517': "攀升-霰弹风暴",
+            '526': "断轨-钢铁洪流",
         }
         return map_dict.get(map_id, f"未知地图{map_id}")
 
@@ -86,6 +108,7 @@ class Util:
         
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
+        second = seconds % 60
         
         if hours > 0:
             if minutes > 0:
@@ -94,9 +117,9 @@ class Util:
                 return f"{hours}小时"
         else:
             if minutes > 0:
-                return f"{minutes}分钟"
+                return f"{minutes}分{second}秒"
             else:
-                return f"{seconds}秒"
+                return f"{second}秒"
 
     @staticmethod
     def get_Sunday_date(which_week: int = 1) -> tuple[str, str]:
@@ -129,7 +152,9 @@ class Util:
         return sunday.strftime('%Y%m%d'), sunday.strftime('%Y-%m-%d')
 
     @staticmethod
-    def get_armed_force_name(armed_force_id: int) -> str:
+    def get_armed_force_name(armed_force_id: int|str) -> str:
+        if isinstance(armed_force_id, str):
+            armed_force_id = int(armed_force_id)
         armed_force_dict = {
             30009: "乌鲁鲁",
             10010: "威龙",
@@ -145,6 +170,17 @@ class Util:
         }
 
         return armed_force_dict.get(armed_force_id, f"未知干员{armed_force_id}")
+
+    @staticmethod
+    def get_tdm_match_result(result: int|str) -> str:
+        if isinstance(result, str):
+            result = int(result)
+        result_dict = {
+            1: "胜利",
+            2: "失败",
+            3: "中途退出"
+        }
+        return result_dict.get(result, f"未知结果{result}")
 
 
 if __name__ == "__main__":

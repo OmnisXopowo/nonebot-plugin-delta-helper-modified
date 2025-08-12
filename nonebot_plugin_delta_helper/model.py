@@ -14,6 +14,7 @@ class LatestRecord(Model):
     """用户最新战绩记录"""
     qq_id: Mapped[int] = mapped_column(primary_key=True)  # 用户QQ号作为主键
     latest_record_id: Mapped[str] = mapped_column()  # 最新战绩ID
+    latest_tdm_record_id: Mapped[str] = mapped_column(default='temp', server_default=text('temp'))  # 最新TDM战绩ID
 
 class SafehouseRecord(Model):
     """用户特勤处生产记录"""

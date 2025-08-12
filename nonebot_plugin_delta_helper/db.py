@@ -42,13 +42,9 @@ class UserDataDatabase:
         """获取用户最新战绩记录"""
         return await self.session.get(LatestRecord, qq_id)
 
-    async def update_latest_record(self, qq_id: int, record_id: str) -> bool:
+    async def update_latest_record(self, latest_record: LatestRecord) -> bool:
         """更新用户最新战绩记录"""
         try:
-            latest_record = LatestRecord(
-                qq_id=qq_id,
-                latest_record_id=record_id
-            )
             await self.session.merge(latest_record)
             return True
         except Exception as e:

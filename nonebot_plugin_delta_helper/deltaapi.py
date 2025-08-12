@@ -548,12 +548,14 @@ class DeltaApi:
             logger.exception(f"获取密码失败: {e}")
             return {'status': False, 'message': '获取密码失败，详情请查看日志', 'data': {}}
 
-    async def get_record(self, access_token: str, openid: str):
+    async def get_record(self, access_token: str, openid: str, type_id: int = 4, page: int = 1):
         """
         获取战绩记录
         :param openid: openid
         :param access_token: access_token
-        :param access_type: 登录类型，默认为'qq'
+        :param access_type: 登录类型, 默认为'qq'
+        :param type_id: 类型, 4为烽火, 5为战场, 默认为4
+        :param page: 页码, 默认为1
         :return: 战绩记录
         """
         access_type = self.platform
@@ -575,28 +577,26 @@ class DeltaApi:
             # 定义类型映射
             types = {4: 'gun', 5: 'operator'}
             
-            # 遍历每种类型
-            for type_id, key in types.items():
-                # 遍历5页数据（长时间未游戏可能需要翻页获取）
-                for page in range(1, 6):
-                    form_data = {
-                        'iChartId': 319386,
-                        'iSubChartId': 319386,
-                        'sIdeToken': 'zMemOt',
-                        'type': type_id,
-                        'page': page,
-                    }
-                    
-                    url = CONSTANTS['GAMEBASEURL']
-                    response = await self.client.post(url, data=form_data, cookies=cookies)
-                    
-                    data = response.json()
-                    if data['ret'] == 0 and data['jData']['data']:
-                        # 合并数据
-                        game_data[key].extend(data['jData']['data'])
-                    elif data['ret'] != 0:
-                        logger.error(f"获取战绩失败: {data}")
-                        return {'status': False, 'message': '获取失败', 'data': {}}
+            key = types[type_id]
+
+            form_data = {
+                'iChartId': 319386,
+                'iSubChartId': 319386,
+                'sIdeToken': 'zMemOt',
+                'type': type_id,
+                'page': page,
+            }
+            
+            url = CONSTANTS['GAMEBASEURL']
+            response = await self.client.post(url, data=form_data, cookies=cookies)
+            
+            data = response.json()
+            if data['ret'] == 0 and data['jData']['data']:
+                # 合并数据
+                game_data[key].extend(data['jData']['data'])
+            elif data['ret'] != 0:
+                logger.error(f"获取战绩失败: {data}")
+                return {'status': False, 'message': '获取失败', 'data': {}}
             
             return {'status': True, 'message': '获取成功', 'data': game_data}
             
@@ -702,7 +702,10 @@ class DeltaApi:
 
             data = response.json()
             if data['ret'] == 0:
-                return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+                if data['jData']['data']['data']:
+                    return {'status': True, 'message': '获取成功', 'data': data['jData']['data']['data']}
+                else:
+                    return {'status': False, 'message': '获取成功，但无数据', 'data': {}}
             else:
                 logger.error(f"获取每日报告失败: {data}")
                 return {'status': False, 'message': '获取失败，可能需要重新登录', 'data': {}}

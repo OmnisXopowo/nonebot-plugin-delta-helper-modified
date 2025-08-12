@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block extra_styles %}
+/* 单战绩卡片紧凑样式 */
+.card { max-width: 440px; }
+.kv-pair { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #eee; }
+.kv-pair:last-child { border-bottom: none; }
+.muted { color: #6b7280; }
+/* 让信息行名值合并在同一行展示 */
+.info-row.single { display: block; }
+/* 紧凑：多项并排，但每一项名值相邻成对展示 */
+.inline-group { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.inline-group:last-child { border-bottom: none; }
+.kv-inline { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: 1; }
+.kv-label { color: #6b7280; font-size: 14px; }
+.kv-value { color: #1a1a1a; font-weight: 600; }
+/* 覆盖颜色：结果成功/失败着色 */
+.kv-value.success { color: #10b981; }
+.kv-value.danger { color: #ef4444; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div class="card-icon">
+      🗒️
+    </div>
+    <div>
+      <h2 class="card-title">{{ title }} {{ time }}</h2>
+      {% if user_name %}<p class="card-subtitle">{{ user_name }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="card-content">
+    <!-- 如实反映文本模板的字段 -->
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">🗺️ 地图</span><span class="kv-value">{{ map_name }}</span></div>
+      <div class="kv-inline"><span class="kv-label">👤 干员</span><span class="kv-value">{{ armed_force }}</span></div>
+    </div>
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">📊 结果</span><span class="kv-value {% if result in ['撤离成功','胜利'] %}success{% else %}danger{% endif %}">{{ result }}</span></div>
+      <div class="kv-inline"><span class="kv-label">⏱️ 存活时长</span><span class="kv-value">{{ duration }}</span></div>
+    </div>
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">💀 击杀干员</span><span class="kv-value">{{ kill_count }}</span></div>
+    </div>
+    <div class="inline-group">
+      <div class="kv-inline"><span class="kv-label">💰 带出</span><span class="kv-value">{{ price }}</span></div>
+      <div class="kv-inline"><span class="kv-label">💸 利润</span><span class="kv-value">{{ profit }}</span></div>
+    </div>
+  </div>
+  <div class="footer">DELTA HELPER</div>
+  
+</div>
+{% endblock %}
+
+

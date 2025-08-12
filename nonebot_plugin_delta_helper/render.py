@@ -122,6 +122,13 @@ class CardRenderer:
                     raise RuntimeError("浏览器未初始化")
                 page = await self.context.new_page()
                 
+                # 根据模板调整视口宽度（仅help更宽）
+                if template_name == 'help.html':
+                    try:
+                        await page.set_viewport_size({'width': 720, 'height': 800})
+                    except Exception:
+                        pass
+
                 # 设置页面内容
                 await page.set_content(html)
                 
@@ -314,6 +321,10 @@ class CardRenderer:
         """渲染战绩播报卡片"""
         return await self.render_card('battle_record.html', data)
     
+    async def render_single_battle_card(self, data: Dict[str, Any]) -> bytes:
+        """渲染单战绩卡片"""
+        return await self.render_card('single_battle_card.html', data)
+    
     async def render_ai_comment(self, user_name: str, date_range: str, comment: str, score: Optional[float] = None) -> bytes:
         """渲染AI锐评卡片"""
         return await self.render_card('ai_comment.html', {
@@ -322,6 +333,14 @@ class CardRenderer:
             'comment': comment,
             'score': score
         })
+
+    async def render_tdm_battle_record(self, data: Dict[str, Any]) -> bytes:
+        """渲染战场战绩播报卡片"""
+        return await self.render_card('tdm_battle_record.html', data)
+
+    async def render_single_tdm_card(self, data: Dict[str, Any]) -> bytes:
+        """渲染战场模式单战绩卡片"""
+        return await self.render_card('single_tdm_card.html', data)
 
 
 # 全局渲染器实例
