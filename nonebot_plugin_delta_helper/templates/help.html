@@ -5,10 +5,14 @@
 body { padding: 8px; }
 .card { max-width: none; width: 100%; }
 .help-section-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #333;
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+  margin: 14px 0 10px;
+  padding: 6px 10px;
+  border-left: 4px solid #667eea;
+  background: linear-gradient(90deg, #f8fafc 0%, rgba(248,250,252,0) 100%);
+  border-radius: 4px;
 }
 .help-row {
   display: grid;
@@ -20,8 +24,8 @@ body { padding: 8px; }
 }
 .help-row:last-child { border-bottom: none; }
 .help-label {
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 500;
+  color: #4b5563;
   text-align: left;
   white-space: nowrap; /* 命令不换行 */
   overflow: hidden; /* 防止溢出挤占第二列 */
@@ -103,8 +107,5 @@ body { padding: 8px; }
         </div>
     </div>
     
-    <div class="footer">
-        <p>登录后自动播报百万撤离或百万战损战绩</p>
-    </div>
 </div>
 {% endblock %}

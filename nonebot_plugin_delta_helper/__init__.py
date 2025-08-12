@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import json
-from typing import Union
+from typing import Union, Literal
 import urllib.parse
 import httpx
 from openai import AsyncOpenAI
@@ -66,8 +66,7 @@ bind_delta_login = on_command("三角洲登录", aliases={"三角洲登陆"})
 bind_delta_player_info = on_command("三角洲信息")
 bind_delta_password = on_command("三角洲密码")
 bind_delta_safehouse = on_command("三角洲特勤处")
-bind_delta_safehouse_remind_open = on_command("三角洲特勤处提醒开启")
-bind_delta_safehouse_remind_close = on_command("三角洲特勤处提醒关闭")
+bind_delta_safehouse_remind_open_close = on_command("三角洲特勤处提醒")
 bind_delta_daily_report = on_command("三角洲日报")
 bind_delta_weekly_report = on_command("三角洲周报")
 bind_delta_ai_comment = on_command("三角洲AI锐评", aliases={"三角洲ai锐评"})
@@ -90,12 +89,11 @@ async def _(event: MessageEvent, session: async_scoped_session):
 2. 三角洲信息：查看三角洲基本信息
 3. 三角洲密码：查看三角洲今日密码门密码
 4. 三角洲特勤处：查看三角洲特勤处制造状态
-5. 三角洲特勤处提醒开启：开启特勤处提醒功能
-6. 三角洲特勤处提醒关闭：关闭特勤处提醒功能
-7. 三角洲日报：查看三角洲日报
-8. 三角洲周报：查看三角洲周报
-9. 三角洲AI锐评：ai锐评玩家数据
-10.三角洲战绩 [模式] [页码]：查看三角洲战绩，模式可选：烽火/战场，默认烽火，页码可选任意正整数，不指定页码则显示第一页""")
+5. 三角洲特勤处提醒 [操作]：开启或关闭特勤处提醒功能，操作可选：开启/关闭
+6. 三角洲日报：查看三角洲日报
+7. 三角洲周报：查看三角洲周报
+8. 三角洲AI锐评：ai锐评玩家数据
+9. 三角洲战绩 [模式] [页码] L[战绩条数上限]：查看三角洲战绩，模式可选：烽火/战场，默认烽火，页码可选任意正整数，不指定页码则显示第一页，战绩条数上限可选任意正整数，不指定默认50""")
 
 interval = 120
 BROADCAST_EXPIRED_MINUTES = 7
@@ -300,7 +298,7 @@ async def format_tdm_record_message(record_data: dict, user_name: str) -> bytes|
         logger.exception(f"格式化战场战绩消息失败: {e}")
         return None
 
-def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADCAST_EXPIRED_MINUTES) -> bool:
+def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADCAST_EXPIRED_MINUTES, mode: Literal["sol", "tdm"] = "sol") -> bool:
     """检查战绩是否在时间限制内"""
     try:
         event_time_str = record_data.get('dtEventTime', '')
@@ -312,7 +310,11 @@ def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADC
         event_time_str = event_time_str.replace(' : ', ':')
         
         # 解析时间
-        event_time = datetime.datetime.strptime(event_time_str, '%Y-%m-%d %H:%M:%S')
+        if mode == "sol":
+            event_time = datetime.datetime.strptime(event_time_str, '%Y-%m-%d %H:%M:%S')
+        elif mode == "tdm":
+            gametime = record_data.get('GameTime', 0)
+            event_time = datetime.datetime.strptime(event_time_str, '%Y-%m-%d %H:%M:%S') + datetime.timedelta(seconds=gametime)
         current_time = datetime.datetime.now()
         
         # 计算时间差
@@ -324,46 +326,47 @@ def is_record_within_time_limit(record_data: dict, max_age_minutes: int = BROADC
         logger.error(f"检查战绩时间限制失败: {e}")
         return False
 
-@bind_delta_safehouse_remind_open.handle()
-async def _(event: MessageEvent, session: async_scoped_session):
+@bind_delta_safehouse_remind_open_close.handle()
+async def safehouse_remind_open_close(event: MessageEvent, session: async_scoped_session, args: Message = CommandArg()):
     user_data_database = UserDataDatabase(session)
     user_data = await user_data_database.get_user_data(event.user_id)
     if not user_data:
-        await bind_delta_safehouse_remind_open.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
-    if user_data.if_remind_safehouse:
-        await bind_delta_safehouse_remind_open.finish("特勤处提醒功能已开启", reply_message=True)
-    user_data.if_remind_safehouse = True
-    
-    # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
-    qq_id = user_data.qq_id
-    
-    await user_data_database.update_user_data(user_data)
-    await user_data_database.commit()
-    logger.info(f"启动特勤处监控任务: {qq_id}")
-    scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
-    await bind_delta_safehouse_remind_open.finish("特勤处提醒功能已开启", reply_message=True)
+        await bind_delta_safehouse_remind_open_close.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
 
-@bind_delta_safehouse_remind_close.handle()
-async def _(event: MessageEvent, session: async_scoped_session):
-    user_data_database = UserDataDatabase(session)
-    user_data = await user_data_database.get_user_data(event.user_id)
-    if not user_data:
-        await bind_delta_safehouse_remind_close.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
-    if not user_data.if_remind_safehouse:
-        await bind_delta_safehouse_remind_close.finish("特勤处提醒功能已关闭", reply_message=True)
-    user_data.if_remind_safehouse = False
+    arg = args.extract_plain_text().strip()
+
+    if arg == "开启" or arg == "":
+        if user_data.if_remind_safehouse:
+            await bind_delta_safehouse_remind_open_close.finish("特勤处提醒功能已开启", reply_message=True)
+        user_data.if_remind_safehouse = True
+        
+        # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
+        qq_id = user_data.qq_id
+        
+        await user_data_database.update_user_data(user_data)
+        await user_data_database.commit()
+        logger.info(f"启动特勤处监控任务: {qq_id}")
+        scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
+        await bind_delta_safehouse_remind_open_close.finish("特勤处提醒功能已开启", reply_message=True)
     
-    # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
-    qq_id = user_data.qq_id
-    
-    await user_data_database.update_user_data(user_data)
-    await user_data_database.commit()
-    try:
-        scheduler.remove_job(f'delta_watch_safehouse_{qq_id}')
-    except Exception:
-        # 任务可能不存在，忽略错误
-        pass
-    await bind_delta_safehouse_remind_close.finish("特勤处提醒功能已关闭", reply_message=True)
+    elif arg == "关闭":
+        if not user_data.if_remind_safehouse:
+            await bind_delta_safehouse_remind_open_close.finish("特勤处提醒功能已关闭", reply_message=True)
+        user_data.if_remind_safehouse = False
+        
+        # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
+        qq_id = user_data.qq_id
+        
+        await user_data_database.update_user_data(user_data)
+        await user_data_database.commit()
+        try:
+            scheduler.remove_job(f'delta_watch_safehouse_{qq_id}')
+        except Exception:
+            # 任务可能不存在，忽略错误
+            pass
+        await bind_delta_safehouse_remind_open_close.finish("特勤处提醒功能已关闭", reply_message=True)
+    else:
+        await bind_delta_safehouse_remind_open_close.finish("参数错误，请使用\"三角洲特勤处提醒 开启\"或\"三角洲特勤处提醒 关闭\"", reply_message=True)
 
 @bind_delta_login.handle()
 async def _(event: MessageEvent, session: async_scoped_session, args: Message = CommandArg()):
@@ -1029,40 +1032,61 @@ async def get_record(event: MessageEvent, session: async_scoped_session, args: M
     if not user_data:
         await bind_delta_get_record.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
     
-    arg_list = args.extract_plain_text().strip().split()
-    if len(arg_list) == 0:
-        type_id = 4
-        page = 1
-    elif len(arg_list) == 1:
-        try:
-            page = int(arg_list[0])
-            type_id = 4
-        except ValueError:
-            page = 1
-            if arg_list[0] in ["烽火", "烽火行动"]:
+    # 解析参数，支持：
+    # [模式] [页码] L[战绩条数上限]
+    # 默认：模式=烽火(type_id=4)，页码=1，条数上限=50
+    raw_text = args.extract_plain_text().strip()
+    type_id = 4
+    page = 1
+    line_limit = 50
+
+    if raw_text:
+        tokens = raw_text.split()
+        seen_page = False
+        seen_mode = False
+        seen_limit = False
+
+        for token in tokens:
+            # 处理条数上限 L<number>
+            if token.startswith(('L', 'l')):
+                if seen_limit:
+                    await bind_delta_get_record.finish("参数过多", reply_message=True)
+                limit_str = token[1:]
+                if not limit_str.isdigit():
+                    await bind_delta_get_record.finish("参数错误", reply_message=True)
+                value = int(limit_str)
+                if value <= 0:
+                    await bind_delta_get_record.finish("参数错误", reply_message=True)
+                line_limit = value
+                seen_limit = True
+                continue
+
+            # 处理模式
+            if token in ["烽火", "烽火行动"]:
+                if seen_mode:
+                    await bind_delta_get_record.finish("参数过多", reply_message=True)
                 type_id = 4
-            elif arg_list[0] in ["战场", "大战场", "全面战场"]:
+                seen_mode = True
+                continue
+            if token in ["战场", "大战场", "全面战场"]:
+                if seen_mode:
+                    await bind_delta_get_record.finish("参数过多", reply_message=True)
                 type_id = 5
-            else:
-                await bind_delta_get_record.finish("请输入正确的模式名", reply_message=True)
-    elif len(arg_list) == 2:
-        try:
-            page = int(arg_list[0])
-            mode_name = arg_list[1]
-        except ValueError:
+                seen_mode = True
+                continue
+
+            # 处理页码（正整数）
             try:
-                page = int(arg_list[1])
-                mode_name = arg_list[0]
+                page_value = int(token)
+                if page_value <= 0:
+                    await bind_delta_get_record.finish("参数错误", reply_message=True)
+                if seen_page:
+                    await bind_delta_get_record.finish("参数过多", reply_message=True)
+                page = page_value
+                seen_page = True
             except ValueError:
-                await bind_delta_get_record.finish("参数错误", reply_message=True)
-        if mode_name in ["烽火", "烽火行动"]:
-            type_id = 4
-        elif mode_name in ["战场", "大战场", "全面战场"]:
-            type_id = 5
-        else:
-            await bind_delta_get_record.finish("请输入正确的模式名", reply_message=True)
-    else:
-        await bind_delta_get_record.finish("参数过多", reply_message=True)
+                # 非法的词元（既不是模式、也不是数字、也不是L上限）
+                await bind_delta_get_record.finish("请输入正确参数，格式：三角洲战绩 [模式] [页码] L[战绩条数上限]", reply_message=True)
 
     deltaapi = DeltaApi(user_data.platform)
     res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
@@ -1093,6 +1117,8 @@ async def get_record(event: MessageEvent, session: async_scoped_session, args: M
             cur_index = index
             index += 1
 
+            if cur_index > line_limit:
+                break
             # 解析时间
             event_time = record.get('dtEventTime', '')
             # 解析地图
@@ -1365,7 +1391,7 @@ async def watch_record_tdm(user_name: str, qq_id: int):
                 latest_record = operator_records[0]  # 第一条是最新的
                 
                 # 检查时间限制
-                if not is_record_within_time_limit(latest_record):
+                if not is_record_within_time_limit(latest_record, mode="tdm"):
                     logger.debug(f"最新战绩时间超过{BROADCAST_EXPIRED_MINUTES}分钟，跳过播报")
                     await session.close()
                     return
