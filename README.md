@@ -78,6 +78,7 @@ _✨ 三角洲助手插件 ✨_
 | delta_helper_ai_base_url | 否 | 空 | 调用AI模型的base url |
 | delta_helper_ai_model | 否 | 空 | 调用的AI模型名 |
 | delta_helper_ai_proxy | 否 | 空 | 调用AI模型使用的代理 |
+| delta_helper_request_proxy | 否 | 空 | 向腾讯官方接口发送请求使用的代理 |
 | delta_helper_enable_broadcast_record | 否 | true | 全局允许(不是开启)或关闭战绩自动播报功能 |
 
 ## 🎉 使用

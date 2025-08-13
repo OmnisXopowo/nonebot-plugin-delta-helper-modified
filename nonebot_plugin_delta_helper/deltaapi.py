@@ -6,7 +6,10 @@ import base64
 import json
 import urllib.parse
 import re
+
+from nonebot import get_plugin_config
 from .util import Util
+from .config import Config
 
 CONSTANTS = {
     'SIG':'https://xui.ptlogin2.qq.com/ssl/ptqrshow',
@@ -23,10 +26,16 @@ CONSTANTS = {
     }
 }
 
+config = get_plugin_config(Config)
+
 class DeltaApi:
     def __init__(self, platform: str = 'qq'):
         self.platform = platform
-        self.client = httpx.AsyncClient(timeout=200)
+        proxy = config.delta_helper_request_proxy
+        if proxy:
+            self.client = httpx.AsyncClient(timeout=200, proxy=proxy)
+        else:
+            self.client = httpx.AsyncClient(timeout=200)
 
     async def close(self):
         await self.client.aclose()
