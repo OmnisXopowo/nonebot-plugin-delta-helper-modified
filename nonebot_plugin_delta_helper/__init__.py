@@ -60,6 +60,14 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config = get_plugin_config(Config)
+interval = 120
+BROADCAST_EXPIRED_MINUTES = 7
+SAFEHOUSE_CHECK_INTERVAL = 600  # 特勤处检查间隔（秒）
+ai_api_key = config.delta_helper_ai_api_key
+ai_base_url = config.delta_helper_ai_base_url
+ai_model = config.delta_helper_ai_model
+ai_proxy = config.delta_helper_ai_proxy
+enable_broadcast_record = config.delta_helper_enable_broadcast_record
 
 bind_delta_help = on_command("三角洲帮助")
 bind_delta_login = on_command("三角洲登录", aliases={"三角洲登陆"})
@@ -71,6 +79,7 @@ bind_delta_daily_report = on_command("三角洲日报")
 bind_delta_weekly_report = on_command("三角洲周报")
 bind_delta_ai_comment = on_command("三角洲AI锐评", aliases={"三角洲ai锐评"})
 bind_delta_get_record = on_command("三角洲战绩")
+bind_delta_broadcast_record_open_close = on_command("三角洲战绩播报")
 
 @bind_delta_help.handle()
 async def _(event: MessageEvent, session: async_scoped_session):
@@ -95,13 +104,6 @@ async def _(event: MessageEvent, session: async_scoped_session):
 8. 三角洲AI锐评：ai锐评玩家数据
 9. 三角洲战绩 [模式] [页码] L[战绩条数上限]：查看三角洲战绩，模式可选：烽火/战场，默认烽火，页码可选任意正整数，不指定页码则显示第一页，战绩条数上限可选任意正整数，不指定默认50""")
 
-interval = 120
-BROADCAST_EXPIRED_MINUTES = 7
-SAFEHOUSE_CHECK_INTERVAL = 600  # 特勤处检查间隔（秒）
-ai_api_key = config.delta_helper_ai_api_key
-ai_base_url = config.delta_helper_ai_base_url
-ai_model = config.delta_helper_ai_model
-ai_proxy = config.delta_helper_ai_proxy
 
 def generate_record_id(record_data: dict) -> str:
     """生成战绩唯一标识"""
@@ -367,6 +369,59 @@ async def safehouse_remind_open_close(event: MessageEvent, session: async_scoped
         await bind_delta_safehouse_remind_open_close.finish("特勤处提醒功能已关闭", reply_message=True)
     else:
         await bind_delta_safehouse_remind_open_close.finish("参数错误，请使用\"三角洲特勤处提醒 开启\"或\"三角洲特勤处提醒 关闭\"", reply_message=True)
+
+@bind_delta_broadcast_record_open_close.handle()
+async def broadcast_record_open_close(event: MessageEvent, session: async_scoped_session, args: Message = CommandArg()):
+    user_data_database = UserDataDatabase(session)
+    user_data = await user_data_database.get_user_data(event.user_id)
+    if not user_data:
+        await bind_delta_broadcast_record_open_close.finish("未绑定三角洲账号，请先用\"三角洲登录\"命令登录", reply_message=True)
+
+    arg = args.extract_plain_text().strip()
+
+    if arg == "开启" or arg == "":
+        if user_data.if_broadcast_record:
+            await bind_delta_broadcast_record_open_close.finish("战绩播报功能已开启", reply_message=True)
+        user_data.if_broadcast_record = True
+        
+        # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
+        qq_id = user_data.qq_id
+        
+        await user_data_database.update_user_data(user_data)
+        await user_data_database.commit()
+
+        deltaapi = DeltaApi(user_data.platform)
+        res = await deltaapi.get_player_info(access_token=user_data.access_token, openid=user_data.openid)
+        if res['status'] and res['data']:
+            user_name = res['data']['player']['charac_name']
+        else:
+            user_name = "未知"
+
+        if enable_broadcast_record:
+            logger.info(f"启动战绩监控任务: {qq_id} - {user_name}")
+            scheduler.add_job(watch_all_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+            await bind_delta_broadcast_record_open_close.finish("战绩播报功能已开启", reply_message=True)
+        else:
+            await bind_delta_broadcast_record_open_close.finish("已更新播报监控状态，但bot配置未开启播报功能", reply_message=True)
+    
+    elif arg == "关闭":
+        if not user_data.if_broadcast_record:
+            await bind_delta_broadcast_record_open_close.finish("战绩播报功能已关闭", reply_message=True)
+        user_data.if_broadcast_record = False
+        
+        # 在commit之前获取qq_id，避免会话关闭后无法访问ORM对象属性
+        qq_id = user_data.qq_id
+        
+        await user_data_database.update_user_data(user_data)
+        await user_data_database.commit()
+        try:
+            scheduler.remove_job(f'delta_watch_record_{qq_id}')
+        except Exception:
+            # 任务可能不存在，忽略错误
+            pass
+        await bind_delta_broadcast_record_open_close.finish("战绩播报功能已关闭", reply_message=True)
+    else:
+        await bind_delta_broadcast_record_open_close.finish("参数错误，请使用\"三角洲战绩播报 开启\"或\"三角洲战绩播报 关闭\"", reply_message=True)
 
 @bind_delta_login.handle()
 async def _(event: MessageEvent, session: async_scoped_session, args: Message = CommandArg()):
@@ -1585,15 +1640,18 @@ async def start_watch_record():
             access_token = user_data.access_token
             openid = user_data.openid
             if_remind_safehouse = user_data.if_remind_safehouse
+            if_broadcast_record = user_data.if_broadcast_record
             
             res = await deltaapi.get_player_info(access_token=access_token, openid=openid)
             if res['status'] and 'charac_name' in res['data']['player']:
                 user_name = res['data']['player']['charac_name']
-                scheduler.add_job(watch_all_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                if enable_broadcast_record and if_broadcast_record:
+                    logger.info(f"启动战绩监控任务: {qq_id} - {user_name}")
+                    scheduler.add_job(watch_all_record, 'interval', seconds=interval, id=f'delta_watch_record_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'user_name': user_name, 'qq_id': qq_id}, max_instances=1)
+                
                 # 添加特勤处监控任务
-
                 if if_remind_safehouse:
-                    logger.info(f"启动特勤处监控任务: {qq_id}")
+                    logger.info(f"启动特勤处监控任务: {qq_id} - {user_name}")
                     scheduler.add_job(watch_safehouse, 'interval', seconds=SAFEHOUSE_CHECK_INTERVAL, id=f'delta_watch_safehouse_{qq_id}', next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10), replace_existing=True, kwargs={'qq_id': qq_id}, max_instances=1)
 
             else:

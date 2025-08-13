@@ -7,3 +7,4 @@ class Config(BaseModel):
     delta_helper_ai_base_url: str = ""
     delta_helper_ai_model: str = ""
     delta_helper_ai_proxy: str = ""
+    delta_helper_enable_broadcast_record: bool = True

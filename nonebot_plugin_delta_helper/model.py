@@ -9,6 +9,7 @@ class UserData(Model):
     openid: Mapped[str] = mapped_column()
     if_remind_safehouse: Mapped[bool] = mapped_column(default=False, server_default=text('false'))
     platform: Mapped[str] = mapped_column(default='qq', server_default=text('qq'))
+    if_broadcast_record: Mapped[bool] = mapped_column(default=True, server_default=text('true'))
 
 class LatestRecord(Model):
     """用户最新战绩记录"""
