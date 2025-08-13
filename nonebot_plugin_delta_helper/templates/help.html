@@ -27,9 +27,10 @@ body { padding: 8px; }
   font-weight: 500;
   color: #4b5563;
   text-align: left;
-  white-space: nowrap; /* 命令不换行 */
-  overflow: hidden; /* 防止溢出挤占第二列 */
-  text-overflow: ellipsis; /* 过长时省略号 */
+  white-space: normal; /* 允许命令名换行，避免被裁剪 */
+  overflow: visible;
+  text-overflow: initial;
+  word-break: break-word;
 }
 .help-desc {
   flex: 1 1 auto;
@@ -38,6 +39,33 @@ body { padding: 8px; }
   line-height: 1.6;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+/* 命令示例（小字） */
+.cmd-mini {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.cmd-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-right: 6px;
+  word-break: break-all; /* 示例过长时允许断行，避免裁剪 */
+  line-height: 1.2;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  box-sizing: border-box;
 }
 {% endblock %}
 
@@ -56,16 +84,28 @@ body { padding: 8px; }
             <h3 class="help-section-title">基础功能</h3>
             <div class="info-group">
                 <div class="help-row">
-                    <span class="help-label">三角洲登录 [平台]</span>
-                    <span class="help-desc">扫码登录账号，平台可选填 qq/微信，不填参数默认 qq 登录。登录后会自动播报：百万撤离/百万战损战绩，以及战场百杀或分均 1000+ 战绩。</span>
+                    <span class="help-label">三角洲登录 [平台]
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲登录</span><span class="cmd-inline">三角洲登录 微信</span></span>
+                    </span>
+                    <span class="help-desc">扫码登录账号，平台可选填 qq/微信，不填参数默认 qq 登录。开启播报配置后，登录后会自动播报：百万撤离/百万战损战绩，以及战场百杀或分均 1000+ 战绩。</span>
                 </div>
                 <div class="help-row">
-                    <span class="help-label">三角洲信息</span>
+                    <span class="help-label">三角洲信息
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲信息</span></span>
+                    </span>
                     <span class="help-desc">查看角色信息</span>
                 </div>
                 <div class="help-row">
-                    <span class="help-label">三角洲密码</span>
+                    <span class="help-label">三角洲密码
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲密码</span></span>
+                    </span>
                     <span class="help-desc">查看今日密码门</span>
+                </div>
+                <div class="help-row">
+                    <span class="help-label">三角洲战绩播报 [操作]
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲战绩播报 开启</span><span class="cmd-inline">三角洲战绩播报 关闭</span></span>
+                    </span>
+                    <span class="help-desc">开启或关闭自己的战绩播报功能，操作可选：开启/关闭</span>
                 </div>
             </div>
         </div>
@@ -74,11 +114,15 @@ body { padding: 8px; }
             <h3 class="help-section-title">特勤处功能</h3>
             <div class="info-group">
                 <div class="help-row">
-                    <span class="help-label">三角洲特勤处</span>
+                    <span class="help-label">三角洲特勤处
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲特勤处</span></span>
+                    </span>
                     <span class="help-desc">查看制造状态</span>
                 </div>
                 <div class="help-row">
-                    <span class="help-label">三角洲特勤处提醒开启/关闭</span>
+                    <span class="help-label">三角洲特勤处提醒 [操作]
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲特勤处提醒 开启</span></span>
+                    </span>
                     <span class="help-desc">制造完成提醒</span>
                 </div>
             </div>
@@ -88,20 +132,28 @@ body { padding: 8px; }
             <h3 class="help-section-title">数据统计</h3>
             <div class="info-group">
                 <div class="help-row">
-                    <span class="help-label">三角洲日报</span>
+                    <span class="help-label">三角洲日报
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲日报</span></span>
+                    </span>
                     <span class="help-desc">查看每日统计</span>
                 </div>
                 <div class="help-row">
-                    <span class="help-label">三角洲周报</span>
+                    <span class="help-label">三角洲周报
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲周报</span></span>
+                    </span>
                     <span class="help-desc">查看每周统计</span>
                 </div>
                 <div class="help-row">
-                    <span class="help-label">三角洲AI锐评</span>
+                    <span class="help-label">三角洲AI锐评
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲AI锐评</span></span>
+                    </span>
                     <span class="help-desc">AI 分析玩家数据</span>
                 </div>
                 <div class="help-row">
-                    <span class="help-label">三角洲战绩 [模式] [页码]</span>
-                    <span class="help-desc">查看三角洲战绩；模式可选：烽火/战场（默认烽火）。页码为任意正整数，未指定则显示第一页。</span>
+                    <span class="help-label">三角洲战绩 [模式] [页码] L[战绩条数上限]
+                        <span class="cmd-mini">示例：<span class="cmd-inline">三角洲战绩</span><span class="cmd-inline">三角洲战绩 烽火</span><span class="cmd-inline">三角洲战绩 战场 1 L10</span></span>
+                    </span>
+                    <span class="help-desc">查看三角洲战绩；模式可选：烽火/战场（默认烽火）。页码为任意正整数，未指定则显示第一页。战绩条数上限可选任意正整数，不指定默认50。</span>
                 </div>
             </div>
         </div>
