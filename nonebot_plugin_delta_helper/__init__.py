@@ -236,7 +236,7 @@ async def format_tdm_record_message(record_data: dict, user_name: str) -> bytes|
         assist_num: int = record_data.get('Assist', 0)
         # 分数与时长
         total_score: int = record_data.get('TotalScore', 0)
-        game_time: int = record_data.get('GameTime', 0)  # 秒
+        game_time: int = record_data.get('gametime', 0)  # 秒
         game_time_str = Util.seconds_to_duration(game_time)
         # 分均得分（避免除零）
         avg_score_per_minute: int = int(total_score * 60 / game_time) if game_time and game_time > 0 else 0
