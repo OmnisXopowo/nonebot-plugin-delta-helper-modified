@@ -123,6 +123,8 @@ async def format_record_message(record_data: dict, user_name: str) -> bytes|str|
         escape_fail_reason = record_data.get('EscapeFailReason', 0)
         # 解析时长（秒）
         duration_seconds = record_data.get('DurationS', 0)
+        if not duration_seconds:
+            return None
         # 解析击杀数
         kill_count = record_data.get('KillCount', 0)
         # 解析收益
