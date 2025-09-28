@@ -18,7 +18,7 @@
         <!-- 主要价值展示 -->
         <div class="stat-card" style="margin-bottom: 20px; background: {% if is_gain %}linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%){% else %}linear-gradient(135deg, #fee2e2 0%, #fecaca 100%){% endif %};">
             <div class="stat-label" style="color: {% if is_gain %}#065f46{% else %}#991b1b{% endif %};">
-                {% if is_gain %}💰 带出价值{% else %}💸 战损价值{% endif %}
+                {% if is_gain %}💰 收益价值{% else %}💸 战损价值{% endif %}
             </div>
             <div class="stat-value" style="font-size: 36px; font-weight: 700; color: {% if is_gain %}#059669{% else %}#dc2626{% endif %};">
                 {{ main_value }}

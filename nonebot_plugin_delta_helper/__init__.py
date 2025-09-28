@@ -102,7 +102,7 @@ async def _(event: MessageEvent, session: async_scoped_session):
 6. 三角洲日报：查看三角洲日报
 7. 三角洲周报：查看三角洲周报
 8. 三角洲AI锐评：ai锐评玩家数据
-9. 三角洲战绩 [模式] [页码] L[战绩条数上限]：查看三角洲战绩，模式可选：烽火/战场，默认烽火，页码可选任意正整数，不指定页码则显示第一页，单页战绩条数上限可选任意正整数，不指定默认50
+9. 三角洲战绩 [模式] [页码] L[战绩条数上限]：查看三角洲战绩，模式可选：烽火/战场，默认烽火，页码可选任意正整数，不指定页码则显示第一页，单页战绩条数上限可选任意正整数，不指定默认20
 10. 三角洲战绩播报 [操作]：用户开启或关闭自己的战绩播报功能，操作可选：开启/关闭""")
 
 
@@ -153,10 +153,14 @@ async def format_record_message(record_data: dict, user_name: str) -> bytes|str|
         # 计算战损
         loss_int = int(final_price) - int(flow_cal_gained_price)
         loss_str = Util.trans_num_easy_for_read(loss_int)
+        
+        # 计算纯收益（带出价值 - 战损）
+        pure_profit = int(flow_cal_gained_price)
+        pure_profit_str = Util.trans_num_easy_for_read(pure_profit)
 
         # logger.debug(f"获取到玩家{user_name}的战绩：时间：{event_time}，地图：{get_map_name(map_id)}，结果：{result_str}，存活时长：{duration_str}，击杀干员：{kill_count}，带出：{price_str}，战损：{loss_str}")
         
-        if price_int > 1000000:
+        if pure_profit > 1000000:
             # 构建消息
             message = f"🎯 {user_name} 百万撤离！\n"
             message += f"⏰ 时间: {event_time}\n"
@@ -179,7 +183,7 @@ async def format_record_message(record_data: dict, user_name: str) -> bytes|str|
                     'price': price_str,
                     'loss': loss_str,
                     'is_gain': True,
-                    'main_value': price_str
+                    'main_value': pure_profit_str
                 })
                 return img_data
             except Exception as e:
@@ -1096,7 +1100,7 @@ async def get_record(event: MessageEvent, session: async_scoped_session, args: M
     raw_text = args.extract_plain_text().strip()
     type_id = 4
     page = 1
-    line_limit = 50
+    line_limit = 20
 
     if raw_text:
         tokens = raw_text.split()
