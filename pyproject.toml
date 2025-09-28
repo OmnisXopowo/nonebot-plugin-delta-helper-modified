@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "nonebot-plugin-delta-helper"
+name = "nonebot_plugin_delta_helper_modified"
 version = "0.23.0"
 description = ""
-authors = ["Irelia <1074822720@qq.com>"]
+authors = ["Original Author Irelia <1074822720@qq.com>","Omnis <535157214@qq.com>"]
 license = "MIT"
 readme = "README.md"
 
